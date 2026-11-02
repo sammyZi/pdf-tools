@@ -116,6 +116,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
@@ -146,7 +147,7 @@ fun fmtSize(b: Long?): String = when {
 // dd/mm/yyyy everywhere a date is shown.
 fun fmtDay(ms: Long): String = SimpleDateFormat("dd/MM/yyyy", Locale.US).format(Date(ms))
 fun fmtDate(ms: Long): String = if (daysAgo(ms) == 0) fmtTime(ms) else fmtDay(ms)
-fun plural(n: Int, word: String) = "$n $word${if (n == 1) "" else "s"}"
+fun plural(n: Int, singular: String, pluralForm: String) = "$n ${if (n == 1) singular else pluralForm}"
 
 // File names in lists drop the extension: the glyph beside them already says PDF, DOC, JPG or ZIP.
 fun stem(name: String) = name.replace(Regex("\\.(pdf|docx|jpg|zip)$", RegexOption.IGNORE_CASE), "")
@@ -158,12 +159,16 @@ private fun daysAgo(ms: Long): Int {
   return ((day(System.currentTimeMillis()) - day(ms)) / 86_400_000.0).roundToInt() // noon to noon: DST days still round
 }
 
+/** Whether a timestamp falls on today's calendar day. */
+fun isToday(ms: Long): Boolean = daysAgo(ms) == 0
+
 // "Today · 17/09/2026", "Yesterday · …", a weekday within the past week, then just the date.
+@Composable
 fun dayLabel(ms: Long): String {
   val days = daysAgo(ms)
   val word = when {
-    days == 0 -> "Today"
-    days == 1 -> "Yesterday"
+    days == 0 -> stringResource(R.string.label_today)
+    days == 1 -> stringResource(R.string.label_yesterday)
     days in 2..6 -> SimpleDateFormat("EEEE", Locale.getDefault()).format(Date(ms))
     else -> ""
   }
@@ -171,6 +176,7 @@ fun dayLabel(ms: Long): String {
 }
 
 /** Splits a newest-first list into runs of the same day. */
+@Composable
 fun <T> byDay(items: List<T>, modified: (T) -> Long): List<Pair<String, List<T>>> {
   val out = ArrayList<Pair<String, MutableList<T>>>()
   for (it in items) {
@@ -586,7 +592,7 @@ fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, 
           if (value.isEmpty()) T(placeholder, Type.body, c.faint, maxLines = 1)
           inner()
         }
-        if (value.isNotEmpty()) IconBtn(I.closeCircle, 18.dp, c.faint, "Clear") { onChange("") }
+        if (value.isNotEmpty()) IconBtn(I.closeCircle, 18.dp, c.faint, stringResource(R.string.action_clear)) { onChange("") }
       }
     },
   )
@@ -652,7 +658,7 @@ fun AppDialog(onDismiss: () -> Unit, title: String, subtitle: String? = null, co
               T(title, Type.title.copy(fontSize = Type.title.fontSize * 0.8f, lineHeight = Type.title.lineHeight * 0.8f))
               if (!subtitle.isNullOrEmpty()) T(subtitle, Type.small, c.sub, Modifier.padding(top = 4.dp))
             }
-            IconBtn(I.close, 20.dp, c.faint, "Close", onClick = onDismiss)
+            IconBtn(I.close, 20.dp, c.faint, stringResource(R.string.action_close), onClick = onDismiss)
           }
           content()
         }
@@ -665,7 +671,7 @@ fun AppDialog(onDismiss: () -> Unit, title: String, subtitle: String? = null, co
 fun ConfirmDialog(
   title: String,
   message: String,
-  confirmLabel: String = "Confirm",
+  confirmLabel: String = stringResource(R.string.action_confirm),
   danger: Boolean = false,
   requireTyping: String? = null,
   onDismiss: () -> Unit,
@@ -677,11 +683,11 @@ fun ConfirmDialog(
   AppDialog(onDismiss, title) {
     T(message, Type.body, c.sub, Modifier.padding(top = 12.dp, bottom = 16.dp))
     if (requireTyping != null) {
-      T("To confirm, type “$requireTyping” below:", Type.small, modifier = Modifier.padding(bottom = 8.dp))
-      Field(typed, { typed = it }, Modifier.padding(bottom = 18.dp), placeholder = "Type \"$requireTyping\"", onDone = go)
+      T(stringResource(R.string.msg_type_to_confirm, requireTyping), Type.small, modifier = Modifier.padding(bottom = 8.dp))
+      Field(typed, { typed = it }, Modifier.padding(bottom = 18.dp), placeholder = stringResource(R.string.hint_type_value, requireTyping), onDone = go)
     }
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      Btn("Cancel", Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onDismiss)
+      Btn(stringResource(R.string.action_cancel), Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onDismiss)
       Btn(confirmLabel, Modifier.weight(1f), kind = if (danger) BtnKind.Danger else BtnKind.Primary, enabled = match, onClick = go)
     }
   }
@@ -697,8 +703,8 @@ fun PromptDialog(
   initial: String = "",
   subtitle: String? = null,
   placeholder: String = "",
-  submitLabel: String = "Save",
-  cancelLabel: String = "Cancel",
+  submitLabel: String = stringResource(R.string.action_save),
+  cancelLabel: String = stringResource(R.string.action_cancel),
   keyboard: KeyboardType = KeyboardType.Text,
   onClose: () -> Unit,
   onDismiss: () -> Unit = onClose,

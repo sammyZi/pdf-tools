@@ -48,6 +48,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.pdf.ExperimentalPdfApi
@@ -100,6 +101,7 @@ fun PdfViewerScreen(path: String, name: String) {
   var password by remember { mutableStateOf<String?>(null) }
   var asking by remember { mutableStateOf(false) }
   var wrong by remember { mutableStateOf(false) }
+  val problemText = stringResource(R.string.error_pdf_could_not_open)
 
   LaunchedEffect(password) {
     try {
@@ -109,7 +111,7 @@ fun PdfViewerScreen(path: String, name: String) {
       wrong = password != null
       asking = true
     } catch (_: Exception) {
-      problem = "This PDF couldn’t be opened. It may be damaged."
+      problem = problemText
     }
   }
   val latest by rememberUpdatedState(doc)
@@ -156,20 +158,20 @@ fun PdfViewerScreen(path: String, name: String) {
     AnimatedContent(searching, Modifier.statusBarsPadding(), label = "viewerBar", transitionSpec = { fadeIn(tween(160)) togetherWith fadeOut(tween(120)) }) { s ->
       Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (s) {
-          IconBtn(I.arrowLeft, label = "Close search") { searching = false; query = "" }
-          Field(query, { query = it }, Modifier.weight(1f), "Search in this PDF", focus = searchFocus)
+          IconBtn(I.arrowLeft, label = stringResource(R.string.acc_close_search)) { searching = false; query = "" }
+          Field(query, { query = it }, Modifier.weight(1f), stringResource(R.string.hint_search_in_pdf), focus = searchFocus)
           T(
             when { query.isBlank() -> ""; !searched -> "…"; matches.isEmpty() -> "0"; else -> "${at + 1}/${matches.size}" },
             Type.num, c.sub, Modifier.padding(horizontal = 6.dp),
           )
-          IconBtn(I.chevronUp, label = "Previous match", enabled = matches.isNotEmpty()) { at = (at - 1 + matches.size) % matches.size }
-          IconBtn(I.chevronDown, label = "Next match", enabled = matches.isNotEmpty()) { at = (at + 1) % matches.size }
+          IconBtn(I.chevronUp, label = stringResource(R.string.acc_previous_match), enabled = matches.isNotEmpty()) { at = (at - 1 + matches.size) % matches.size }
+          IconBtn(I.chevronDown, label = stringResource(R.string.acc_next_match), enabled = matches.isNotEmpty()) { at = (at + 1) % matches.size }
         } else {
-          IconBtn(I.arrowLeft, label = "Back") { nav.back() }
+          IconBtn(I.arrowLeft, label = stringResource(R.string.action_back)) { nav.back() }
           Marquee(stem(name), Type.bold.copy(fontSize = Type.bold.fontSize * 1.1f), c.ink, Modifier.weight(1f).padding(horizontal = 4.dp))
-          IconBtn(I.magnify, label = "Search", enabled = doc != null) { searching = true }
-          IconBtn(I.shareVariantOutline, label = "Share") { share(path, name) }
-          IconBtn(I.openInNew, label = "Open in another app") { openExternally(path, name) }
+          IconBtn(I.magnify, label = stringResource(R.string.action_search), enabled = doc != null) { searching = true }
+          IconBtn(I.shareVariantOutline, label = stringResource(R.string.action_share)) { share(path, name) }
+          IconBtn(I.openInNew, label = stringResource(R.string.acc_open_in_another_app)) { openExternally(path, name) }
         }
       }
     }
@@ -193,11 +195,11 @@ fun PdfViewerScreen(path: String, name: String) {
           verticalAlignment = Alignment.CenterVertically,
         ) {
           T(
-            "Page $page of $pages", Type.label, c.onPanel,
-            Modifier.tap(shape = CircleShape, scaleTo = 0.94f, label = "Go to page") { jumping = true }.padding(horizontal = 14.dp, vertical = 8.dp),
+            stringResource(R.string.msg_page_x_of_n, page, pages), Type.label, c.onPanel,
+            Modifier.tap(shape = CircleShape, scaleTo = 0.94f, label = stringResource(R.string.acc_go_to_page)) { jumping = true }.padding(horizontal = 14.dp, vertical = 8.dp),
           )
           Box(
-            Modifier.size(36.dp).tap(shape = CircleShape, scaleTo = 0.9f, label = "Page thumbnails") { thumbs = true }.background(c.accent, CircleShape),
+            Modifier.size(36.dp).tap(shape = CircleShape, scaleTo = 0.9f, label = stringResource(R.string.acc_page_thumbnails)) { thumbs = true }.background(c.accent, CircleShape),
             contentAlignment = Alignment.Center,
           ) { Icon(I.viewGridOutline, 18.dp, Brand.cherry) }
         }
@@ -206,7 +208,7 @@ fun PdfViewerScreen(path: String, name: String) {
   }
 
   if (jumping) PromptDialog(
-    "Go to page", "$page", "1 to $pages", "Page number", "Go", keyboard = KeyboardType.Number, onClose = { jumping = false },
+    stringResource(R.string.title_go_to_page), "$page", stringResource(R.string.msg_1_to_n, pages), stringResource(R.string.hint_page_number), stringResource(R.string.action_go), keyboard = KeyboardType.Number, onClose = { jumping = false },
   ) { typed -> typed.toIntOrNull()?.let { n -> scope.launch { state.scrollToPage((n - 1).coerceIn(0, pages - 1)) } } }
 
   if (thumbs) ModalBottomSheet({ thumbs = false }, containerColor = c.surface) {
@@ -255,14 +257,15 @@ private fun Thumbnails(path: String, pages: Int, current: Int, onPick: (Int) -> 
     itemsIndexed((0 until pages).toList()) { _, i ->
       val t = shots?.getOrNull(i)
       val img = rememberBitmap(t?.path, 300)
-      Column(Modifier.tap(scaleTo = 0.94f, label = "Page ${i + 1}") { onPick(i) }, horizontalAlignment = Alignment.CenterHorizontally) {
+      val pageLabel = stringResource(R.string.acc_page_n, i + 1)
+      Column(Modifier.tap(scaleTo = 0.94f, label = pageLabel) { onPick(i) }, horizontalAlignment = Alignment.CenterHorizontally) {
         val shape = RoundedCornerShape(6.dp)
         Box(
           Modifier.fillMaxWidth().aspectRatio(if (t != null) t.width.toFloat() / t.height else 0.71f).clip(shape).background(c.page)
             .border(if (i == current) 2.5.dp else 0.6.dp, if (i == current) c.accent else c.lineStrong, shape),
           contentAlignment = Alignment.Center,
         ) {
-          if (img != null) Image(img, "Page ${i + 1}", Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+          if (img != null) Image(img, pageLabel, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
           else T("${i + 1}", Type.title, c.faint)
         }
         T("${i + 1}", Type.num, if (i == current) c.accent else c.sub, Modifier.padding(top = 4.dp))
@@ -274,12 +277,12 @@ private fun Thumbnails(path: String, pages: Int, current: Int, onPick: (Int) -> 
 @Composable
 private fun PasswordPrompt(name: String, wrong: Boolean, onCancel: () -> Unit, onSubmit: (String) -> Unit) {
   var typed by remember { mutableStateOf("") }
-  AppDialog(onCancel, "Password-protected PDF", "Enter the password for “${stem(name)}” to open it.") {
-    Field(typed, { typed = it }, Modifier.padding(top = 14.dp), "Password", secret = true, error = wrong, onDone = { if (typed.isNotEmpty()) onSubmit(typed) })
-    if (wrong) T("That password didn’t open it. Try again.", Type.small, c.accent, Modifier.padding(top = 6.dp))
+  AppDialog(onCancel, stringResource(R.string.title_password_protected_pdf), stringResource(R.string.msg_enter_password_for, stem(name))) {
+    Field(typed, { typed = it }, Modifier.padding(top = 14.dp), stringResource(R.string.opt_password_label), secret = true, error = wrong, onDone = { if (typed.isNotEmpty()) onSubmit(typed) })
+    if (wrong) T(stringResource(R.string.error_wrong_password), Type.small, c.accent, Modifier.padding(top = 6.dp))
     Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      Btn("Cancel", Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onCancel)
-      Btn("Open", Modifier.weight(1f), kind = BtnKind.Accent, enabled = typed.isNotEmpty()) { onSubmit(typed) }
+      Btn(stringResource(R.string.action_cancel), Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onCancel)
+      Btn(stringResource(R.string.action_open), Modifier.weight(1f), kind = BtnKind.Accent, enabled = typed.isNotEmpty()) { onSubmit(typed) }
     }
   }
 }

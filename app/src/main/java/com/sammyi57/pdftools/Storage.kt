@@ -48,7 +48,7 @@ fun cleanName(s: String) = s.replace(BAD, "_").trim()
 fun rootFolder(): File = File(appContext.filesDir, "PDF Tools").apply { mkdirs() }
 
 fun createFolder(name: String): Folder {
-  val clean = cleanName(name).ifEmpty { "New Folder" }
+  val clean = cleanName(name).ifEmpty { appContext.getString(R.string.default_folder_name) }
   var d = File(rootFolder(), clean)
   var i = 2
   while (d.exists()) d = File(rootFolder(), "$clean (${i++})")
@@ -94,7 +94,7 @@ fun clearFiles() {
 // Never overwrites: "Report-merged.pdf" becomes "Report-merged (2).pdf" if taken.
 private fun freeFile(base: String, ext: String, dir: File = rootFolder()): File {
   dir.mkdirs()
-  val clean = cleanName(base).ifEmpty { "document" }
+  val clean = cleanName(base).ifEmpty { appContext.getString(R.string.default_document_name) }
   var f = File(dir, "$clean.$ext")
   var i = 2
   while (f.exists()) f = File(dir, "$clean (${i++}).$ext")
@@ -268,10 +268,10 @@ suspend fun saveToDevice(f: Saved): String {
   val cr = appContext.contentResolver
   val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
   withContext(Dispatchers.IO) {
-    val doc = DocumentsContract.createDocument(cr, parent, mimeOf(f.name), f.name) ?: error("Couldn't save there. Pick another folder.")
+    val doc = DocumentsContract.createDocument(cr, parent, mimeOf(f.name), f.name) ?: error(appContext.getString(R.string.error_could_not_save_there))
     cr.openOutputStream(doc)?.use { out -> File(f.path).inputStream().use { it.copyTo(out) } }
   }
-  return Uri.decode(tree.toString()).split('/', ':').lastOrNull { it.isNotEmpty() } ?: "your folder" // …/tree/primary:Download -> Download
+  return Uri.decode(tree.toString()).split('/', ':').lastOrNull { it.isNotEmpty() } ?: appContext.getString(R.string.label_your_folder) // …/tree/primary:Download -> Download
 }
 
 /** Save as Word doc / Save as JPEG: converted, then moved in next to the PDF (not synced: Drive sync is PDFs only). */

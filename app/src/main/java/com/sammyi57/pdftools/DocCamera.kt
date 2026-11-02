@@ -124,7 +124,7 @@ class DocCamera(context: Context) {
 
   /** A full-resolution photo, upright, saved as a JPEG in the cache with the page found in it. */
   suspend fun takePicture(): Photo = suspendCancellableCoroutine { cont ->
-    val c = capture ?: return@suspendCancellableCoroutine cont.resumeWithException(IllegalStateException("Camera is not ready yet."))
+    val c = capture ?: return@suspendCancellableCoroutine cont.resumeWithException(IllegalStateException(appContext.getString(R.string.error_camera_not_ready)))
     c.takePicture(worker, object : ImageCapture.OnImageCapturedCallback() {
       override fun onCaptureSuccess(image: ImageProxy) {
         try {

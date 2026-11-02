@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -133,6 +134,7 @@ fun Scanner(id: String?) {
     if (capture && doc.pages.isNotEmpty()) { retake = null; capture = false } else leave()
   }
 
+  val somethingWentWrong = stringResource(R.string.error_something_went_wrong)
   val save: suspend () -> Unit = {
     try {
       val saved = exportPdf(doc)
@@ -140,7 +142,7 @@ fun Scanner(id: String?) {
       back()
       saved.pdf?.let { openFile(it.path, it.name) }
     } catch (e: Exception) {
-      failure = e.message ?: "Something went wrong."
+      failure = e.message ?: somethingWentWrong
     }
   }
 
@@ -170,31 +172,35 @@ fun Scanner(id: String?) {
   if (recentOpen) RecentScans({ recentOpen = false }) { picked -> doc = picked; capture = false; recentOpen = false; draft = null }
 
   if (asking) {
+    val pageOneAsk = stringResource(R.string.unit_page_one)
+    val pageManyAsk = stringResource(R.string.unit_page_many)
     AppDialog(
-      { asking = false }, if (doc.saved != null) "Save your changes?" else "Save this scan?",
-      if (doc.saved != null) "You edited this scan after saving the PDF." else "${plural(doc.pages.size, "page")}, not saved as a PDF yet.",
+      { asking = false }, if (doc.saved != null) stringResource(R.string.title_save_your_changes_q) else stringResource(R.string.title_save_this_scan_q),
+      if (doc.saved != null) stringResource(R.string.msg_edited_after_saving) else stringResource(R.string.msg_pages_not_saved_as_pdf, plural(doc.pages.size, pageOneAsk, pageManyAsk)),
     ) {
       Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (doc.pages.isNotEmpty()) Btn(if (doc.saved != null) "Update PDF" else "Save PDF", Modifier.fillMaxWidth(), I.filePdfBox, busy = saving) {
+        if (doc.pages.isNotEmpty()) Btn(if (doc.saved != null) stringResource(R.string.action_update_pdf) else stringResource(R.string.action_save_pdf), Modifier.fillMaxWidth(), I.filePdfBox, busy = saving) {
           scope.launch { saving = true; save(); saving = false; asking = false }
         }
-        Btn("Keep as draft", Modifier.fillMaxWidth(), I.contentSaveOutline, BtnKind.Secondary) { saveDoc(doc); asking = false; back() }
-        Btn(if (doc.saved != null) "Discard changes" else "Discard scan", Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { discardChanges(doc); asking = false; back() }
-        T("Drafts stay in Scan → Recent scans, even after closing the app.", Type.small, c.sub, Modifier.fillMaxWidth(), align = TextAlign.Center)
+        Btn(stringResource(R.string.action_keep_as_draft), Modifier.fillMaxWidth(), I.contentSaveOutline, BtnKind.Secondary) { saveDoc(doc); asking = false; back() }
+        Btn(if (doc.saved != null) stringResource(R.string.action_discard_changes) else stringResource(R.string.action_discard_scan), Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { discardChanges(doc); asking = false; back() }
+        T(stringResource(R.string.msg_drafts_stay_in_recent_scans), Type.small, c.sub, Modifier.fillMaxWidth(), align = TextAlign.Center)
       }
     }
   }
   draft?.let { d ->
-    AppDialog({ draft = null }, "Continue your unsaved scan?", "${d.name} · ${plural(d.pages.size, "page")}") {
+    val pageOneDraft = stringResource(R.string.unit_page_one)
+    val pageManyDraft = stringResource(R.string.unit_page_many)
+    AppDialog({ draft = null }, stringResource(R.string.title_continue_unsaved_scan_q), "${d.name} · ${plural(d.pages.size, pageOneDraft, pageManyDraft)}") {
       Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Btn("Continue editing", Modifier.fillMaxWidth(), I.fileDocumentEditOutline) { doc = d; capture = false; draft = null }
-        Btn("Start a new scan", Modifier.fillMaxWidth(), I.cameraOutline, BtnKind.Secondary) { draft = null }
-        Btn(if (d.saved != null) "Discard its changes" else "Discard it", Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { discardChanges(d); draft = null }
+        Btn(stringResource(R.string.action_continue_editing), Modifier.fillMaxWidth(), I.fileDocumentEditOutline) { doc = d; capture = false; draft = null }
+        Btn(stringResource(R.string.action_start_new_scan), Modifier.fillMaxWidth(), I.cameraOutline, BtnKind.Secondary) { draft = null }
+        Btn(if (d.saved != null) stringResource(R.string.action_discard_its_changes) else stringResource(R.string.action_discard_it), Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { discardChanges(d); draft = null }
       }
     }
   }
   if (failure.isNotEmpty()) {
-    AppDialog({ failure = "" }, "Couldn’t save the PDF", failure) { Btn("OK", Modifier.fillMaxWidth().padding(top = 18.dp), kind = BtnKind.Secondary) { failure = "" } }
+    AppDialog({ failure = "" }, stringResource(R.string.title_could_not_save_pdf), failure) { Btn(stringResource(R.string.action_ok), Modifier.fillMaxWidth().padding(top = 18.dp), kind = BtnKind.Secondary) { failure = "" } }
   }
 }
 
@@ -347,34 +353,35 @@ private fun Capture(
   }
 
   val status = when {
-    !detecting -> "Fit the whole whiteboard in the frame"
-    busy -> "Capturing…"
-    kind == "id" -> if (front != null) "Turn the card over and capture the back" else "Capture the front of the card"
-    !auto -> "Line up the page and tap the shutter"
-    steady -> "Capturing… hold steady"
-    lost -> "No document found. Capture manually."
-    corners != null -> "Hold steady"
-    else -> "Looking for document"
+    !detecting -> stringResource(R.string.status_fit_whiteboard)
+    busy -> stringResource(R.string.status_capturing)
+    kind == "id" -> if (front != null) stringResource(R.string.status_turn_card_over) else stringResource(R.string.status_capture_front_of_card)
+    !auto -> stringResource(R.string.status_line_up_and_tap)
+    steady -> stringResource(R.string.status_capturing_hold_steady)
+    lost -> stringResource(R.string.status_no_document_found)
+    corners != null -> stringResource(R.string.status_hold_steady)
+    else -> stringResource(R.string.status_looking_for_document)
   }
 
   Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
     Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-      Tap(I.close, "Close", onClick = if (doc.pages.isNotEmpty()) onReview else onClose)
-      if (retake != null) T("Retake page", Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center) else Spacer(Modifier.weight(1f))
-      if (retake == null && doc.pages.isEmpty()) Tap(I.history, "Recent scans", onClick = onRecent)
+      Tap(I.close, stringResource(R.string.action_close), onClick = if (doc.pages.isNotEmpty()) onReview else onClose)
+      if (retake != null) T(stringResource(R.string.label_retake_page), Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center) else Spacer(Modifier.weight(1f))
+      if (retake == null && doc.pages.isEmpty()) Tap(I.history, stringResource(R.string.label_recent_scans), onClick = onRecent)
       // Flash stays in its place whatever the lens, so nothing shifts when flipping: front lenses have no flash on most
       // phones, so there it's dimmed and off.
       val (next, glyph) = when (flash) { "off" -> "auto" to I.flashOff; "auto" -> "on" to I.flashAuto; else -> "off" to I.flash }
+      val flashLabel = stringResource(when (flash) { "off" -> R.string.acc_flash_off; "auto" -> R.string.acc_flash_auto; else -> R.string.acc_flash_on })
       Box(Modifier.graphicsLayer { alpha = if (selfie) 0.35f else 1f }) {
-        Tap(if (selfie) I.flashOff else glyph, if (selfie) "No flash on the front camera" else "Flash $flash") { if (!selfie) flash = next }
+        Tap(if (selfie) I.flashOff else glyph, if (selfie) stringResource(R.string.acc_no_flash_front_camera) else flashLabel) { if (!selfie) flash = next }
       }
-      if (hasFrontLens) Tap(I.cameraFlipOutline, if (selfie) "Switch to back camera" else "Switch to front camera") { selfie = !selfie }
+      if (hasFrontLens) Tap(I.cameraFlipOutline, if (selfie) stringResource(R.string.acc_switch_to_back_camera) else stringResource(R.string.acc_switch_to_front_camera)) { selfie = !selfie }
       if (detecting) {
         val tint by animateColorAsState(if (auto) ScanUi.accent else ScanUi.text, label = "auto")
         Row(Modifier.tap(scaleTo = 0.92f) { auto = !auto }.padding(horizontal = 10.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           Icon(if (auto) I.cameraIris else I.gestureTap, 20.dp, tint)
           Spacer(Modifier.size(4.dp))
-          T(if (auto) "Auto" else "Manual", Type.med, tint)
+          T(if (auto) stringResource(R.string.label_auto) else stringResource(R.string.label_manual), Type.med, tint)
         }
       }
     }
@@ -401,9 +408,9 @@ private fun Capture(
         } else {
           Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(I.cameraOffOutline, 36.dp, ScanUi.dim)
-            T("Allow camera access to scan documents.", Type.item, ScanUi.text, Modifier.padding(vertical = 12.dp), align = TextAlign.Center)
+            T(stringResource(R.string.msg_allow_camera_access), Type.item, ScanUi.text, Modifier.padding(vertical = 12.dp), align = TextAlign.Center)
             T(
-              if (denied) "Open Settings" else "Allow camera", Type.bold, ScanUi.onAccent,
+              if (denied) stringResource(R.string.action_open_settings) else stringResource(R.string.action_allow_camera), Type.bold, ScanUi.onAccent,
               Modifier.tap(shape = CircleShape) {
                 if (denied) context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 else scope.launch { granted = runCatching { awaitResult(ActivityResultContracts.RequestPermission(), Manifest.permission.CAMERA) }.getOrDefault(false); denied = !granted }
@@ -422,13 +429,13 @@ private fun Capture(
             val img = rememberBitmap(front?.src, 200)
             Box(Modifier.size(56.dp, 40.dp).clip(RoundedCornerShape(4.dp)).background(ScanUi.raised)) { if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-              T("Front captured", Type.bold, ScanUi.text)
-              T("Now capture the back", Type.small, ScanUi.dim)
+              T(stringResource(R.string.msg_front_captured), Type.bold, ScanUi.text)
+              T(stringResource(R.string.msg_now_capture_back), Type.small, ScanUi.dim)
             }
             Row(Modifier.tap(shape = CircleShape) { front = null }.background(ScanUi.raised, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
               Icon(I.cameraRetakeOutline, 16.dp, ScanUi.text)
               Spacer(Modifier.size(5.dp))
-              T("Retake", Type.med, ScanUi.text)
+              T(stringResource(R.string.action_retake), Type.med, ScanUi.text)
             }
           }
         }
@@ -438,7 +445,7 @@ private fun Capture(
           Row(Modifier.padding(12.dp).fillMaxWidth().background(Color.White, RoundedCornerShape(Radius.control)).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(I.qrcode, 22.dp, ScanUi.accent)
             T(qr, Type.med, Color(0xFF111111), Modifier.weight(1f).padding(horizontal = 10.dp), maxLines = 2)
-            T(if (link) "Open" else "Share", Type.bold, ScanUi.accent, Modifier.tap { if (link) openUrl(qr) else shareText(qr) })
+            T(if (link) stringResource(R.string.action_open) else stringResource(R.string.action_share), Type.bold, ScanUi.accent, Modifier.tap { if (link) openUrl(qr) else shareText(qr) })
             Spacer(Modifier.size(10.dp))
             Box(Modifier.tap(scaleTo = 0.85f) { qr = "" }) { Icon(I.close, 18.dp, Color(0xFF555555)) }
           }
@@ -464,14 +471,14 @@ private fun Capture(
     }
 
     Row(Modifier.fillMaxWidth().height(110.dp).padding(bottom = 6.dp), horizontalArrangement = Arrangement.SpaceAround, verticalAlignment = Alignment.CenterVertically) {
-      Tap(I.imageMultipleOutline, "Import from gallery", 28, onClick = importPhotos)
+      Tap(I.imageMultipleOutline, stringResource(R.string.acc_import_from_gallery), 28, onClick = importPhotos)
       val inner by animateColorAsState(if (steady) ScanUi.accent else Color.White, label = "shutter")
       Box(
-        Modifier.size(78.dp).tap(enabled = !busy && granted, shape = CircleShape, scaleTo = 0.9f, label = "Capture", onClick = shoot).border(4.dp, Color.White, CircleShape),
+        Modifier.size(78.dp).tap(enabled = !busy && granted, shape = CircleShape, scaleTo = 0.9f, label = stringResource(R.string.acc_capture), onClick = shoot).border(4.dp, Color.White, CircleShape),
         contentAlignment = Alignment.Center,
       ) { if (busy) Spinner(ScanUi.accent) else Box(Modifier.size(62.dp).background(inner, CircleShape)) }
       val last = doc.pages.takeLast(3)
-      Box(Modifier.size(56.dp, 70.dp).tap(enabled = doc.pages.isNotEmpty(), label = "Review ${doc.pages.size} pages", onClick = onReview), contentAlignment = Alignment.Center) {
+      Box(Modifier.size(56.dp, 70.dp).tap(enabled = doc.pages.isNotEmpty(), label = stringResource(R.string.acc_review_n_pages, doc.pages.size), onClick = onReview), contentAlignment = Alignment.Center) {
         last.forEachIndexed { i, p ->
           val img = rememberBitmap(p.shots[0].out ?: p.shots[0].src, 200)
           Box(
@@ -502,16 +509,21 @@ private fun RecentScans(onClose: () -> Unit, onPick: (ScanDoc) -> Unit) {
   FullSheet(onClose, ScanUi.bg) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
       Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Tap(I.close, "Close", onClick = onClose)
-        T("Recent scans", Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center)
+        Tap(I.close, stringResource(R.string.action_close), onClick = onClose)
+        T(stringResource(R.string.label_recent_scans), Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center)
         Spacer(Modifier.size(48.dp))
       }
       if (docs.isEmpty()) {
         Column(Modifier.fillMaxSize().padding(40.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
           Icon(I.lineScan, 48.dp, ScanUi.dim)
-          T("Scans you make appear here, so you can edit them again later.", Type.body, ScanUi.dim, Modifier.padding(top = 12.dp), align = TextAlign.Center)
+          T(stringResource(R.string.msg_scans_appear_here), Type.body, ScanUi.dim, Modifier.padding(top = 12.dp), align = TextAlign.Center)
         }
       } else Column(Modifier.verticalScroll(rememberScrollState())) {
+        val pageOneRS = stringResource(R.string.unit_page_one)
+        val pageManyRS = stringResource(R.string.unit_page_many)
+        val draftLabel = stringResource(R.string.label_draft)
+        val unsavedChangesLabel = stringResource(R.string.label_unsaved_changes)
+        val savedLabel = stringResource(R.string.label_saved)
         docs.forEachIndexed { i, d ->
           Stagger(i) {
             Row(Modifier.fillMaxWidth().tap(pressed = ScanUi.panel) { onPick(d) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -520,17 +532,17 @@ private fun RecentScans(onClose: () -> Unit, onPick: (ScanDoc) -> Unit) {
               Box(Modifier.size(40.dp, 52.dp).clip(RoundedCornerShape(4.dp)).background(ScanUi.raised)) { if (img != null) Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
               Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 T(d.name, Type.item, ScanUi.text, maxLines = 1)
-                T("${plural(d.pages.size, "page")} · ${if (d.saved == null) "Draft" else if (d.isDirty()) "Unsaved changes" else "Saved"} · ${fmtDate(d.modified)}", Type.small, ScanUi.dim)
+                T("${plural(d.pages.size, pageOneRS, pageManyRS)} · ${if (d.saved == null) draftLabel else if (d.isDirty()) unsavedChangesLabel else savedLabel} · ${fmtDate(d.modified)}", Type.small, ScanUi.dim)
               }
-              d.pdf?.let { pdf -> Tap(I.filePdfBox, "Open PDF", 22) { openFile(pathOf(pdf.path), pdf.name) } }
-              Tap(I.deleteOutline, "Delete scan", 22, ScanUi.dim) { deleting = d }
+              d.pdf?.let { pdf -> Tap(I.filePdfBox, stringResource(R.string.acc_open_pdf), 22) { openFile(pathOf(pdf.path), pdf.name) } }
+              Tap(I.deleteOutline, stringResource(R.string.acc_delete_scan), 22, ScanUi.dim) { deleting = d }
             }
           }
         }
       }
     }
     deleting?.let { d ->
-      ConfirmDialog("Delete this scan?", "The photos and edits are removed. A PDF you already saved stays in Files.", "Delete", danger = true, onDismiss = { deleting = null }) {
+      ConfirmDialog(stringResource(R.string.title_delete_this_scan_q), stringResource(R.string.msg_delete_scan_body), stringResource(R.string.action_delete), danger = true, onDismiss = { deleting = null }) {
         deleteDoc(d.id)
         docs = listDocs()
       }

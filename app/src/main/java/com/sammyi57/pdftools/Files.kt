@@ -37,13 +37,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Filter(val label: String) { All("All"), Pdf("PDF"), Zip("ZIP"), Recent("Recent") }
+private enum class Filter(val labelRes: Int) { All(R.string.filter_all), Pdf(R.string.filter_pdf), Zip(R.string.filter_zip), Recent(R.string.filter_recent) }
+private val Filter.label: String get() = appContext.getString(labelRes)
 
 private sealed interface Menu {
   data class OfFile(val f: Saved) : Menu
@@ -91,20 +93,34 @@ fun FilesTab() {
     } && (needle.isEmpty() || it.name.lowercase().contains(needle))
   }
   val filteredBytes = filtered.sumOf { it.size }
+  val fileOne = stringResource(R.string.unit_file_one)
+  val fileMany = stringResource(R.string.unit_file_many)
+  val folderOne = stringResource(R.string.unit_folder_one)
+  val folderMany = stringResource(R.string.unit_folder_many)
   val subtitle = when {
-    needle.isNotEmpty() || filter != Filter.All -> if (filtered.isNotEmpty()) "${plural(filtered.size, "file")} · ${fmtSize(filteredBytes)}" else "No matching files"
-    folder != null -> if (files.isNotEmpty()) "${plural(files.size, "file")} · ${fmtSize(filteredBytes)}" else "Empty folder"
-    all.isNotEmpty() && folders.isNotEmpty() -> "${plural(all.size, "file")} across ${plural(folders.size, "folder")} · ${fmtSize(all.sumOf { it.size })} on this phone"
-    all.isNotEmpty() -> "${plural(all.size, "file")} · ${fmtSize(all.sumOf { it.size })} on this phone"
-    folders.isNotEmpty() -> plural(folders.size, "folder")
+    needle.isNotEmpty() || filter != Filter.All -> if (filtered.isNotEmpty()) stringResource(R.string.msg_files_count_size, plural(filtered.size, fileOne, fileMany), fmtSize(filteredBytes)) else stringResource(R.string.msg_no_matching_files)
+    folder != null -> if (files.isNotEmpty()) stringResource(R.string.msg_files_count_size, plural(files.size, fileOne, fileMany), fmtSize(filteredBytes)) else stringResource(R.string.msg_empty_folder)
+    all.isNotEmpty() && folders.isNotEmpty() -> stringResource(R.string.msg_files_across_folders, plural(all.size, fileOne, fileMany), plural(folders.size, folderOne, folderMany), fmtSize(all.sumOf { it.size }))
+    all.isNotEmpty() -> stringResource(R.string.msg_files_on_phone, plural(all.size, fileOne, fileMany), fmtSize(all.sumOf { it.size }))
+    folders.isNotEmpty() -> plural(folders.size, folderOne, folderMany)
     else -> null
   }
 
-  val newFolder = { prompt = PromptSpec("New Folder", "Enter a name for this folder", "Folder name", "", "Create") { createFolder(it) } }
+  val newFolderTitle = stringResource(R.string.title_new_folder)
+  val newFolderSubtitle = stringResource(R.string.msg_enter_folder_name)
+  val folderNameHint = stringResource(R.string.hint_folder_name)
+  val actionCreate = stringResource(R.string.action_create)
+  val newFolder = { prompt = PromptSpec(newFolderTitle, newFolderSubtitle, folderNameHint, "", actionCreate) { createFolder(it) } }
+  val titleDeleteFileQ = stringResource(R.string.title_delete_file_q)
+  val msgFileWillBeRemoved = stringResource(R.string.msg_file_will_be_removed)
   val deleteFile = { f: Saved ->
-    if (Backup.hasDriveCopies(listOf(f.path))) deleteChoice = DeleteChoice("Delete this file?", "\"${f.name}\"", listOf(f.path)) { removeFile(f.path) }
-    else confirm = ConfirmSpec("Delete this file?", "\"${f.name}\" will be removed from this phone. Copies you already shared are not affected.") { removeFile(f.path) }
+    if (Backup.hasDriveCopies(listOf(f.path))) deleteChoice = DeleteChoice(titleDeleteFileQ, "\"${f.name}\"", listOf(f.path)) { removeFile(f.path) }
+    else confirm = ConfirmSpec(titleDeleteFileQ, "\"${f.name}\" $msgFileWillBeRemoved") { removeFile(f.path) }
   }
+  val titleDeleteFolderQ = stringResource(R.string.title_delete_folder_q)
+  val msgFilesInside = stringResource(R.string.msg_files_inside)
+  val msgAnyFilesInside = stringResource(R.string.msg_any_files_inside)
+  val msgFolderWillBeDeleted = stringResource(R.string.msg_folder_will_be_deleted)
   val deleteFolder = { f: Folder, count: Int ->
     val paths = listFiles(f.path).map { it.path }
     // Both sides: the whole Drive folder goes to the Trash, Drive-only files too, not just the copies sync linked.
@@ -112,8 +128,8 @@ fun FilesTab() {
       scope.launch { try { Backup.deleteFolder(f.name) } catch (e: Exception) { Backup.update { it.copy(error = Backup.describe(e)) } } }
       Unit
     }
-    if (Backup.hasDriveCopies(paths)) deleteChoice = DeleteChoice("Delete folder?", "\"${f.name}\" and ${plural(count, "file")} inside", paths, both) { removeFolder(f.path) }
-    else confirm = ConfirmSpec("Delete folder?", "\"${f.name}\" and ${if (count == 0) "any files inside" else "${plural(count, "file")} inside"} will be permanently deleted.") { removeFolder(f.path) }
+    if (Backup.hasDriveCopies(paths)) deleteChoice = DeleteChoice(titleDeleteFolderQ, "\"${f.name}\" ${msgFilesInside.format(plural(count, fileOne, fileMany))}", paths, both) { removeFolder(f.path) }
+    else confirm = ConfirmSpec(titleDeleteFolderQ, "\"${f.name}\" ${if (count == 0) msgAnyFilesInside else msgFilesInside.format(plural(count, fileOne, fileMany))} $msgFolderWillBeDeleted") { removeFolder(f.path) }
   }
 
   Screen {
@@ -121,19 +137,19 @@ fun FilesTab() {
       Row(Modifier.padding(top = 4.dp).tap(scaleTo = 0.95f, onClick = goBack).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(I.arrowLeft, 20.dp)
         Spacer(Modifier.size(6.dp))
-        T("All Files", Type.med, c.sub)
+        T(stringResource(R.string.action_all_files_title), Type.med, c.sub)
       }
-      LargeTitle(folderName, if (onDrive) "In Google Drive" else subtitle)
+      LargeTitle(folderName, if (onDrive) stringResource(R.string.label_in_google_drive) else subtitle)
     } else {
-      LargeTitle("Files", if (onDrive) "Synced with Google Drive" else subtitle)
+      LargeTitle(stringResource(R.string.label_files), if (onDrive) stringResource(R.string.msg_synced_with_drive) else subtitle)
     }
 
     // Phone / Google Drive, only at the top level: inside a folder the subtitle already says which side it is.
     if (folderName == null) {
-      Segmented(listOf(false to "On this phone", true to "Google Drive"), onDrive, icons = listOf(I.cellphone, I.googleDrive)) { onDrive = it }
+      Segmented(listOf(false to stringResource(R.string.label_on_this_phone), true to stringResource(R.string.label_google_drive)), onDrive, icons = listOf(I.cellphone, I.googleDrive)) { onDrive = it }
       Spacer(Modifier.height(12.dp))
     }
-    SearchField(query, { query = it }, "Search files…")
+    SearchField(query, { query = it }, stringResource(R.string.hint_search_files))
 
     AnimatedContent(onDrive, label = "place", transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }) { drive ->
       Column {
@@ -144,7 +160,7 @@ fun FilesTab() {
         // Folders sit on top as a strip of cards; the filters below only narrow the files.
         val showFolders = folder == null && needle.isEmpty() && (folders.isNotEmpty() || files.isNotEmpty())
         if (showFolders) {
-          GroupLabel(if (folders.isEmpty()) "Folders" else "Folders · ${folders.size}", first = true)
+          GroupLabel(if (folders.isEmpty()) stringResource(R.string.label_folders) else stringResource(R.string.label_folders_count, folders.size), first = true)
           Row(Modifier.padding(top = 4.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             NewFolderCard(newFolder)
             folders.forEach { (f, n) ->
@@ -154,18 +170,18 @@ fun FilesTab() {
         }
         when {
           files.isEmpty() && needle.isEmpty() && showFolders -> T(
-            "Files you save outside a folder appear here.", Type.small, c.sub, Modifier.fillMaxWidth().padding(top = 28.dp), align = TextAlign.Center,
+            stringResource(R.string.msg_files_outside_folder_appear), Type.small, c.sub, Modifier.fillMaxWidth().padding(top = 28.dp), align = TextAlign.Center,
           )
           files.isEmpty() && needle.isEmpty() -> Empty(
             { ToolArt("files", 112.dp) },
-            if (folder != null) "This folder is empty" else "No files yet",
-            if (folder != null) "Move files into this folder or generate new PDFs." else "PDFs you merge, split, compress or scan are saved here, so you can share them again later.",
+            if (folder != null) stringResource(R.string.title_folder_empty) else stringResource(R.string.title_no_files_yet),
+            if (folder != null) stringResource(R.string.msg_move_files_into_folder) else stringResource(R.string.msg_pdfs_saved_here),
           ) {
-            if (folder != null) Btn("Back to All Files", Modifier.fillMaxWidth(), kind = BtnKind.Secondary, onClick = goBack)
+            if (folder != null) Btn(stringResource(R.string.action_back_to_all_files), Modifier.fillMaxWidth(), kind = BtnKind.Secondary, onClick = goBack)
             else {
-              Btn("Create a folder", Modifier.fillMaxWidth(), I.folderPlusOutline, onClick = newFolder)
-              Btn("Scan a document", Modifier.fillMaxWidth(), I.cameraOutline, BtnKind.Secondary) { nav.scan() }
-              Btn("Browse tools", Modifier.fillMaxWidth(), kind = BtnKind.Secondary) { nav.show(Tab.Tools) }
+              Btn(stringResource(R.string.action_create_a_folder), Modifier.fillMaxWidth(), I.folderPlusOutline, onClick = newFolder)
+              Btn(stringResource(R.string.label_scan_document), Modifier.fillMaxWidth(), I.cameraOutline, BtnKind.Secondary) { nav.scan() }
+              Btn(stringResource(R.string.action_browse_tools), Modifier.fillMaxWidth(), kind = BtnKind.Secondary) { nav.show(Tab.Tools) }
             }
           }
           else -> {
@@ -176,8 +192,9 @@ fun FilesTab() {
               Filter.entries.forEach { f -> Chip(f.label, filter == f) { filter = f } }
             }
             if (filtered.isEmpty()) {
-              T("No files match \"${needle.ifEmpty { filter.label }}\".", Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 28.dp), align = TextAlign.Center)
+              T(stringResource(R.string.msg_no_files_match, needle.ifEmpty { filter.label }), Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 28.dp), align = TextAlign.Center)
             }
+            val moreLabel = stringResource(R.string.action_more)
             byDay(filtered) { it.modified }.forEachIndexed { gi, (label, items) ->
               GroupLabel(label, first = gi == 0)
               Group {
@@ -188,7 +205,7 @@ fun FilesTab() {
                   ) {
                     // Only files still waiting to upload get a cloud: "Synced" is the normal state.
                     if (Backup.waiting(f.path, f.name)) Icon(I.cloudUploadOutline, 17.dp, c.accent)
-                    IconBtn(I.dotsVertical, color = c.sub, label = "More") { menu = Menu.OfFile(f) }
+                    IconBtn(I.dotsVertical, color = c.sub, label = moreLabel) { menu = Menu.OfFile(f) }
                   }
                 }
               }
@@ -208,39 +225,48 @@ fun FilesTab() {
         when (m) {
           is Menu.OfFile -> {
             val f = m.f
-            scans[f.name]?.let { id -> MenuRow(I.fileDocumentEditOutline, "Edit scan", onClick = pick { nav.scan(id) }) }
-            MenuRow(I.shareVariantOutline, "Share", onClick = pick { share(f.path, f.name) })
+            scans[f.name]?.let { id -> MenuRow(I.fileDocumentEditOutline, stringResource(R.string.action_edit_scan), onClick = pick { nav.scan(id) }) }
+            MenuRow(I.shareVariantOutline, stringResource(R.string.action_share), onClick = pick { share(f.path, f.name) })
             if (kindOf(f.name) == DocKind.Pdf) {
-              MenuRow(I.fileWordOutline, "Save as Word doc", onClick = pick { exporting = f to true })
-              MenuRow(I.fileImageOutline, "Save as JPEG", onClick = pick { exporting = f to false })
+              MenuRow(I.fileWordOutline, stringResource(R.string.action_save_as_word), onClick = pick { exporting = f to true })
+              MenuRow(I.fileImageOutline, stringResource(R.string.action_save_as_jpeg), onClick = pick { exporting = f to false })
             }
-            MenuRow(I.pencilOutline, "Rename", onClick = pick {
-              prompt = PromptSpec("Rename File", "Rename \"${f.name}\"", "File name", stem(f.name), "Save") { relinkPdf(f.path, renameFile(f, it)) }
+            val renameFileTitle = stringResource(R.string.title_rename_file)
+            val renameFileHint = stringResource(R.string.hint_file_name)
+            val renamePrefix = stringResource(R.string.msg_rename_quoted)
+            val saveLabel = stringResource(R.string.action_save)
+            MenuRow(I.pencilOutline, stringResource(R.string.action_rename), onClick = pick {
+              prompt = PromptSpec(renameFileTitle, renamePrefix.format(f.name), renameFileHint, stem(f.name), saveLabel) { relinkPdf(f.path, renameFile(f, it)) }
             })
-            MenuRow(I.folderMoveOutline, "Move to folder", onClick = pick { moving = f })
-            MenuRow(I.deleteOutline, "Delete", color = c.accent, onClick = pick { deleteFile(f) })
+            MenuRow(I.folderMoveOutline, stringResource(R.string.action_move_to_folder), onClick = pick { moving = f })
+            MenuRow(I.deleteOutline, stringResource(R.string.action_delete), color = c.accent, onClick = pick { deleteFile(f) })
           }
           is Menu.OfFolder -> {
-            MenuRow(I.pencilOutline, "Rename", onClick = pick {
-              prompt = PromptSpec("Rename Folder", "Rename \"${m.f.name}\"", "Folder name", m.f.name, "Save") { renameFolder(m.f.path, it) }
+            val renameFolderTitle = stringResource(R.string.title_rename_folder)
+            val renamePrefix = stringResource(R.string.msg_rename_quoted)
+            val folderNameHint2 = stringResource(R.string.hint_folder_name)
+            val saveLabel = stringResource(R.string.action_save)
+            MenuRow(I.pencilOutline, stringResource(R.string.action_rename), onClick = pick {
+              prompt = PromptSpec(renameFolderTitle, renamePrefix.format(m.f.name), folderNameHint2, m.f.name, saveLabel) { renameFolder(m.f.path, it) }
             })
-            MenuRow(I.deleteOutline, "Delete", color = c.accent, onClick = pick { deleteFolder(m.f, m.count) })
+            MenuRow(I.deleteOutline, stringResource(R.string.action_delete), color = c.accent, onClick = pick { deleteFolder(m.f, m.count) })
           }
         }
       }
     }
   }
 
+  val deleteLabel = stringResource(R.string.action_delete)
   prompt?.let { p -> PromptDialog(p.title, p.initial, p.subtitle, p.placeholder, p.submit, onClose = { prompt = null }, onSubmit = p.run) }
-  confirm?.let { cf -> ConfirmDialog(cf.title, cf.message, "Delete", danger = true, onDismiss = { confirm = null }, onConfirm = cf.run) }
+  confirm?.let { cf -> ConfirmDialog(cf.title, cf.message, deleteLabel, danger = true, onDismiss = { confirm = null }, onConfirm = cf.run) }
 
   deleteChoice?.let { d ->
-    AppDialog({ deleteChoice = null }, d.title, "${d.what} ${if (d.paths.size > 1) "are" else "is"} also in your Google Drive.") {
+    AppDialog({ deleteChoice = null }, d.title, stringResource(if (d.paths.size > 1) R.string.msg_also_in_drive_plural else R.string.msg_also_in_drive_singular, d.what)) {
       Column(Modifier.padding(top = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Btn("Delete from this phone only", Modifier.fillMaxWidth(), I.cellphoneRemove, BtnKind.Secondary) { Backup.keepInDriveOnly(d.paths); d.remove(); deleteChoice = null }
-        Btn("Delete from phone and Drive", Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { (d.removeBoth ?: d.remove)(); deleteChoice = null }
+        Btn(stringResource(R.string.action_delete_phone_only), Modifier.fillMaxWidth(), I.cellphoneRemove, BtnKind.Secondary) { Backup.keepInDriveOnly(d.paths); d.remove(); deleteChoice = null }
+        Btn(stringResource(R.string.action_delete_phone_and_drive), Modifier.fillMaxWidth(), I.deleteOutline, BtnKind.Danger) { (d.removeBoth ?: d.remove)(); deleteChoice = null }
         T(
-          "Phone only keeps the Drive copy; you can download it again from Files → Google Drive. Phone and Drive moves the Drive copy to Drive's Trash for 30 days.",
+          stringResource(R.string.msg_delete_file_choice_explain),
           Type.small, c.sub, align = TextAlign.Center,
         )
       }
@@ -248,10 +274,10 @@ fun FilesTab() {
   }
 
   moving?.let { f ->
-    AppDialog({ moving = null }, "Move File", f.name) {
+    AppDialog({ moving = null }, stringResource(R.string.title_move_file), f.name) {
       Column(Modifier.padding(top = 12.dp, bottom = 16.dp)) {
         if (folder != null) {
-          MenuRow(I.homeOutline, "All Files (Root)", "Move out of this folder", c.accent, trailing = { Icon(I.chevronRight, 20.dp, c.faint) }) { moveFileToRoot(f.path); moving = null }
+          MenuRow(I.homeOutline, stringResource(R.string.label_all_files_root), stringResource(R.string.msg_move_out_of_folder), c.accent, trailing = { Icon(I.chevronRight, 20.dp, c.faint) }) { moveFileToRoot(f.path); moving = null }
         }
         val targets = folders.filter { it.first.path != folder?.path }
         targets.forEach { (t, n) ->
@@ -262,16 +288,16 @@ fun FilesTab() {
             FolderGlyph(28.dp)
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
               T(t.name, Type.item)
-              T(plural(n, "file"), Type.small, c.sub)
+              T(plural(n, fileOne, fileMany), Type.small, c.sub)
             }
             Icon(I.chevronRight, 20.dp, c.faint)
           }
         }
         if (targets.isEmpty() && folder == null) {
-          T("No folders exist yet. Create a folder first to organize files.", Type.small, c.sub, Modifier.fillMaxWidth().padding(vertical = 16.dp), align = TextAlign.Center)
+          T(stringResource(R.string.msg_no_folders_yet), Type.small, c.sub, Modifier.fillMaxWidth().padding(vertical = 16.dp), align = TextAlign.Center)
         }
       }
-      Btn("Cancel", Modifier.fillMaxWidth(), kind = BtnKind.Secondary) { moving = null }
+      Btn(stringResource(R.string.action_cancel), Modifier.fillMaxWidth(), kind = BtnKind.Secondary) { moving = null }
     }
   }
 
@@ -284,12 +310,12 @@ private val FOLDER_CARD = 128.dp
 private fun NewFolderCard(onClick: () -> Unit) {
   val shape = RoundedCornerShape(Radius.group)
   Column(
-    Modifier.width(FOLDER_CARD).height(112.dp).tap(shape = shape, scaleTo = 0.95f, label = "New folder", onClick = onClick)
+    Modifier.width(FOLDER_CARD).height(112.dp).tap(shape = shape, scaleTo = 0.95f, label = stringResource(R.string.label_new_folder), onClick = onClick)
       .background(c.accentSoft, shape).padding(14.dp),
     verticalArrangement = Arrangement.SpaceBetween,
   ) {
     Box(Modifier.size(38.dp).background(c.surface, CircleShape), contentAlignment = Alignment.Center) { Icon(I.plus, 20.dp, c.accent) }
-    T("New folder", Type.bold, c.accent, maxLines = 1)
+    T(stringResource(R.string.label_new_folder), Type.bold, c.accent, maxLines = 1)
   }
 }
 
@@ -297,17 +323,17 @@ private fun NewFolderCard(onClick: () -> Unit) {
 private fun FolderCard(name: String, count: Int, onOpen: () -> Unit, onMore: () -> Unit) {
   val shape = RoundedCornerShape(Radius.group)
   Box(
-    Modifier.width(FOLDER_CARD).height(112.dp).tap(shape = shape, scaleTo = 0.95f, label = "Open $name", onLongClick = onMore, onClick = onOpen)
+    Modifier.width(FOLDER_CARD).height(112.dp).tap(shape = shape, scaleTo = 0.95f, label = stringResource(R.string.acc_open_file, name), onLongClick = onMore, onClick = onOpen)
       .background(c.surface, shape).border(0.6.dp, c.lineStrong, shape),
   ) {
     Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
       FolderGlyph(40.dp)
       Column {
         T(name, Type.bold, maxLines = 1)
-        T(plural(count, "file"), Type.small, c.sub, maxLines = 1)
+        T(plural(count, stringResource(R.string.unit_file_one), stringResource(R.string.unit_file_many)), Type.small, c.sub, maxLines = 1)
       }
     }
-    Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) { IconBtn(I.dotsVertical, 18.dp, c.sub, "More", onClick = onMore) }
+    Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) { IconBtn(I.dotsVertical, 18.dp, c.sub, stringResource(R.string.action_more), onClick = onMore) }
   }
 }
 
@@ -330,35 +356,38 @@ private fun ExportDialog(pdf: Saved, word: Boolean, onClose: () -> Unit) {
   }
   val f = file
   when {
-    failed -> AppDialog(onClose, "Couldn’t convert this PDF", "It may be password-protected or damaged.") {
-      Btn("OK", Modifier.fillMaxWidth().padding(top = 18.dp), kind = BtnKind.Secondary, onClick = onClose)
+    failed -> AppDialog(onClose, stringResource(R.string.title_could_not_convert_pdf), stringResource(R.string.msg_pdf_protected_or_damaged)) {
+      Btn(stringResource(R.string.action_ok), Modifier.fillMaxWidth().padding(top = 18.dp), kind = BtnKind.Secondary, onClick = onClose)
     }
-    f == null -> AppDialog(onClose, if (word) "Saving as Word doc…" else "Saving as JPEG…", "Every page is converted on this phone.") {
+    f == null -> AppDialog(onClose, if (word) stringResource(R.string.msg_saving_as_word) else stringResource(R.string.msg_saving_as_jpeg), stringResource(R.string.msg_every_page_converted_on_phone)) {
       Spinner(modifier = Modifier.padding(vertical = 20.dp).align(Alignment.CenterHorizontally))
     }
     else -> {
       val many = f.name.lowercase().endsWith(".zip")
       val drive = Backup.state
+      val somethingWentWrong = stringResource(R.string.error_something_went_wrong)
       val run = { key: String, fn: suspend () -> String? ->
         if (busy.isEmpty()) scope.launch {
           busy = key
-          try { fn()?.let { notes = notes + (key to it) } } catch (e: Exception) { notes = notes + (key to (e.message ?: "Something went wrong.")) }
+          try { fn()?.let { notes = notes + (key to it) } } catch (e: Exception) { notes = notes + (key to (e.message ?: somethingWentWrong)) }
           busy = ""
         }
         Unit
       }
-      AppDialog(onClose, if (word) "Word doc saved" else if (many) "JPEGs saved" else "JPEG saved", "${f.name} · ${fmtSize(f.size)} · in Files") {
+      val savedTo = stringResource(R.string.msg_saved_to)
+      val uploadedToDrive = stringResource(R.string.msg_uploaded_to_drive)
+      AppDialog(onClose, if (word) stringResource(R.string.msg_word_doc_saved) else if (many) stringResource(R.string.msg_jpegs_saved) else stringResource(R.string.msg_jpeg_saved), stringResource(R.string.msg_file_size_in_files, f.name, fmtSize(f.size))) {
         Column(Modifier.padding(top = 10.dp)) {
           val option = @Composable { key: String, glyph: Int, title: String, sub: String, fn: suspend () -> String? ->
             MenuRow(glyph, title, notes[key] ?: sub, trailing = { if (busy == key) Spinner() }) { run(key, fn) }
           }
-          option("open", I.openInNew, "Open", if (word) "In your Word or docs app" else if (many) "A ZIP with one JPEG per page" else "In your gallery or photo app") { openFile(f.path, f.name); null }
-          option("device", I.cellphoneArrowDown, "Save to device", "Pick a folder, like Downloads") { saveToDevice(f).takeIf { it.isNotEmpty() }?.let { "Saved to $it" } }
-          option("drive", I.googleDrive, "Save to Google Drive", if (drive.enabled) "PDF Tools folder · ${drive.email}" else "Turn on Drive sync in Settings first") {
+          option("open", I.openInNew, stringResource(R.string.action_open), if (word) stringResource(R.string.msg_in_word_or_docs_app) else if (many) stringResource(R.string.msg_zip_one_jpeg_per_page) else stringResource(R.string.msg_in_gallery_or_photo_app)) { openFile(f.path, f.name); null }
+          option("device", I.cellphoneArrowDown, stringResource(R.string.action_save_to_device), stringResource(R.string.msg_pick_a_folder_like_downloads)) { saveToDevice(f).takeIf { it.isNotEmpty() }?.let { savedTo.format(it) } }
+          option("drive", I.googleDrive, stringResource(R.string.action_save_to_google_drive), if (drive.enabled) stringResource(R.string.msg_pdf_tools_folder_email, drive.email ?: "") else stringResource(R.string.msg_turn_on_drive_sync_first)) {
             if (!drive.enabled) { onClose(); nav.show(Tab.Settings); null }
-            else try { Backup.saveCopy(f, mimeOf(f.name)); "Uploaded to PDF Tools in your Drive" } catch (e: Exception) { throw UserError(Backup.describe(e)) }
+            else try { Backup.saveCopy(f, mimeOf(f.name)); uploadedToDrive } catch (e: Exception) { throw UserError(Backup.describe(e)) }
           }
-          option("share", I.shareVariantOutline, "Share", "Send to an app or contact") { share(f.path, f.name); null }
+          option("share", I.shareVariantOutline, stringResource(R.string.action_share), stringResource(R.string.msg_send_to_app_or_contact)) { share(f.path, f.name); null }
         }
       }
     }
@@ -390,12 +419,16 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
   BackHandler(picked != null) { picked = null } // back leaves selection before it leaves a folder
 
   if (!state.enabled) {
-    Empty({ Icon(I.googleDrive, 56.dp, c.faint) }, "Google Drive sync is off", "Turn it on to keep your PDFs and folders the same on this phone and in your own Google Drive.") {
-      Btn("Turn on in Settings", Modifier.fillMaxWidth(), I.cogOutline) { nav.show(Tab.Settings) }
+    Empty({ Icon(I.googleDrive, 56.dp, c.faint) }, stringResource(R.string.title_drive_sync_off), stringResource(R.string.msg_turn_on_drive_sync_desc)) {
+      Btn(stringResource(R.string.action_turn_on_in_settings), Modifier.fillMaxWidth(), I.cogOutline) { nav.show(Tab.Settings) }
     }
     return
   }
 
+  val fileOneD = stringResource(R.string.unit_file_one)
+  val fileManyD = stringResource(R.string.unit_file_many)
+  val downloadingOneLabel = stringResource(R.string.msg_downloading_one)
+  val downloadingNOfMLabel = stringResource(R.string.msg_downloading_n_of_m)
   val all = data?.files ?: emptyList()
   val chosen = all.filter { picked?.contains(it.id) == true }
   val toFetch = chosen.filter { !Backup.isOnPhone(it) }
@@ -404,7 +437,7 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
     if (todo.isEmpty()) picked = null
     else scope.launch {
       error = ""
-      val label = { done: Int -> if (todo.size > 1) "Downloading ${minOf(done + 1, todo.size)} of ${todo.size}…" else "Downloading…" }
+      val label = { done: Int -> if (todo.size > 1) downloadingNOfMLabel.format(minOf(done + 1, todo.size), todo.size) else downloadingOneLabel }
       downloading = label(0)
       try {
         Backup.downloadToPhone(todo) { downloading = label(it) }
@@ -437,18 +470,18 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
       Modifier.fillMaxWidth().shadow(14.dp, shape).background(c.surface, shape).border(0.6.dp, c.lineStrong, shape).padding(8.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      IconBtn(I.close, label = "Cancel selection") { picked = null }
+      IconBtn(I.close, label = stringResource(R.string.acc_cancel_selection)) { picked = null }
       Column(Modifier.weight(1f).padding(start = 2.dp)) {
-        T("${plural(chosen.size, "file")} selected", Type.bold)
+        T(stringResource(R.string.msg_count_selected, plural(chosen.size, fileOneD, fileManyD)), Type.bold)
         T(
           downloading.ifEmpty {
-            if (toFetch.isNotEmpty()) "${fmtSize(toFetch.sumOf { it.size })} to download${if (toFetch.size < chosen.size) " · ${chosen.size - toFetch.size} already here" else ""}"
-            else "Already on this phone"
+            if (toFetch.isNotEmpty()) stringResource(R.string.msg_size_to_download, fmtSize(toFetch.sumOf { it.size })) + (if (toFetch.size < chosen.size) " " + stringResource(R.string.msg_already_here_count, chosen.size - toFetch.size) else "")
+            else stringResource(R.string.label_already_on_phone)
           },
           Type.small, c.sub, maxLines = 1,
         )
       }
-      Btn("Download", icon = I.downloadOutline, busy = downloading.isNotEmpty(), enabled = toFetch.isNotEmpty(), height = 46.dp) { download(chosen) }
+      Btn(stringResource(R.string.action_download), icon = I.downloadOutline, busy = downloading.isNotEmpty(), enabled = toFetch.isNotEmpty(), height = 46.dp) { download(chosen) }
     }
   }
 
@@ -460,7 +493,7 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
   val problem = error.ifEmpty { if (!Backup.syncing) state.error ?: "" else "" }
 
   Spacer(Modifier.height(12.dp))
-  GroupLabel(state.email ?: "Google Drive", if (Backup.syncing) "Syncing…" else "Sync now", if (Backup.syncing) null else ({ Backup.syncNow(); Unit }), first = true, caps = false)
+  GroupLabel(state.email ?: stringResource(R.string.label_google_drive), if (Backup.syncing) stringResource(R.string.label_syncing) else stringResource(R.string.label_sync_now), if (Backup.syncing) null else ({ Backup.syncNow(); Unit }), first = true, caps = false)
   Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(0.6.dp).background(c.line)) // sets the account apart from the files under it
   if (problem.isNotEmpty()) T(problem, Type.small, c.accent, Modifier.padding(top = 4.dp, bottom = 4.dp))
   if (downloading.isNotEmpty() && picked == null) T(downloading, Type.small, c.sub, Modifier.padding(vertical = 4.dp))
@@ -469,23 +502,29 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
     data == null && problem.isEmpty() -> Spinner(c.accent, modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally))
     folders.isNotEmpty() || shown.isNotEmpty() -> {
       if (folders.isNotEmpty()) {
-        GroupLabel("Folders")
+        GroupLabel(stringResource(R.string.label_folders))
         Group {
+          val moreLabel = stringResource(R.string.action_more)
           folders.forEachIndexed { i, name ->
             ListRow(
-              name, first = i == 0, lead = { FolderGlyph() }, subtitle = plural(all.count { it.folder == name }, "file"),
+              name, first = i == 0, lead = { FolderGlyph() }, subtitle = plural(all.count { it.folder == name }, fileOneD, fileManyD),
               onClick = { onOpenFolder(name) }, onLongClick = { folderMenu = name },
             ) {
               if (busyId == name) Spinner(c.accent, modifier = Modifier.padding(horizontal = 10.dp))
-              else IconBtn(I.dotsVertical, color = c.sub, label = "More") { folderMenu = name }
+              else IconBtn(I.dotsVertical, color = c.sub, label = moreLabel) { folderMenu = name }
             }
           }
         }
       }
+      val deselectLabel = stringResource(R.string.action_deselect)
+      val selectAllLabel = stringResource(R.string.action_select_all)
+      val onThisPhoneSuffix = stringResource(R.string.msg_on_this_phone_suffix)
+      val downloadLabel = stringResource(R.string.action_download)
+      val shareLabel = stringResource(R.string.action_share)
       byDay(shown) { it.modified }.forEachIndexed { gi, (label, items) ->
         val ids = items.map { it.id }
         val allOn = picked != null && ids.all { picked!!.contains(it) }
-        GroupLabel(label, if (picked != null) (if (allOn) "Deselect" else "Select all") else null, { toggle(ids, !allOn) })
+        GroupLabel(label, if (picked != null) (if (allOn) deselectLabel else selectAllLabel) else null, { toggle(ids, !allOn) })
         Group {
           items.forEachIndexed { i, f ->
             val here = Backup.isOnPhone(f)
@@ -493,15 +532,15 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
             ListRow(
               stem(f.name), first = i == 0, marquee = true,
               lead = { if (picked != null) CheckMark(on) else DocGlyph() },
-              subtitle = "${if (needle.isNotEmpty() && f.folder.isNotEmpty()) "${f.folder} · " else ""}${fmtSize(f.size)} · ${fmtTime(f.modified)}${if (here) " · On this phone" else ""}",
+              subtitle = "${if (needle.isNotEmpty() && f.folder.isNotEmpty()) "${f.folder} · " else ""}${fmtSize(f.size)} · ${fmtTime(f.modified)}${if (here) onThisPhoneSuffix else ""}",
               onClick = if (picked != null) ({ toggle(listOf(f.id), !on) }) else if (busyId.isNotEmpty()) null else ({ act(f) { Backup.fetch(f).let { openFile(it.path, it.name) } } }),
               onLongClick = { if (downloading.isEmpty()) toggle(listOf(f.id), !on) },
             ) {
               if (picked == null) {
                 if (busyId == f.id) Spinner(c.accent, modifier = Modifier.padding(horizontal = 10.dp))
                 else {
-                  if (!here) IconBtn(I.downloadOutline, label = "Download") { if (downloading.isEmpty()) download(listOf(f)) }
-                  IconBtn(I.shareVariantOutline, label = "Share") { act(f) { Backup.fetch(f).let { share(it.path, it.name) } } }
+                  if (!here) IconBtn(I.downloadOutline, label = downloadLabel) { if (downloading.isEmpty()) download(listOf(f)) }
+                  IconBtn(I.shareVariantOutline, label = shareLabel) { act(f) { Backup.fetch(f).let { share(it.path, it.name) } } }
                 }
               }
             }
@@ -510,7 +549,7 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
       }
     }
     data != null -> T(
-      if (needle.isNotEmpty()) "No Drive files match \"${query.trim()}\"." else if (folder != null) "This folder has no PDFs in Drive yet." else "No PDFs in your Drive folder yet.",
+      if (needle.isNotEmpty()) stringResource(R.string.msg_no_drive_files_match, query.trim()) else if (folder != null) stringResource(R.string.msg_folder_no_pdfs_in_drive) else stringResource(R.string.msg_no_pdfs_in_drive_yet),
       Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 40.dp), align = TextAlign.Center,
     )
   }
@@ -531,29 +570,29 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
         T(name, Type.bold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), maxLines = 1)
         val pick = { run: () -> Unit -> { folderMenu = null; run() } }
         MenuRow(
-          I.downloadOutline, "Download all",
-          if (toGet.isEmpty()) "Already on this phone" else "${plural(toGet.size, "file")} · ${fmtSize(toGet.sumOf { it.size })}",
+          I.downloadOutline, stringResource(R.string.action_download_all),
+          if (toGet.isEmpty()) stringResource(R.string.label_already_on_phone) else stringResource(R.string.msg_count_and_size, plural(toGet.size, fileOneD, fileManyD), fmtSize(toGet.sumOf { it.size })),
           onClick = pick { if (downloading.isEmpty()) download(toGet) },
         )
-        MenuRow(I.pencilOutline, "Rename", onClick = pick { renaming = name })
-        MenuRow(I.deleteOutline, "Delete", color = c.accent, onClick = pick { deleting = name })
+        MenuRow(I.pencilOutline, stringResource(R.string.action_rename), onClick = pick { renaming = name })
+        MenuRow(I.deleteOutline, stringResource(R.string.action_delete), color = c.accent, onClick = pick { deleting = name })
       }
     }
   }
   renaming?.let { name ->
-    PromptDialog("Rename Folder", name, "Renamed in Drive and on this phone.", "Folder name", "Save", onClose = { renaming = null }) { typed ->
+    PromptDialog(stringResource(R.string.title_rename_folder), name, stringResource(R.string.msg_renamed_in_drive_and_phone), stringResource(R.string.hint_folder_name), stringResource(R.string.action_save), onClose = { renaming = null }) { typed ->
       folderAct(name) { Backup.renameFolder(name, typed) }
     }
   }
   deleting?.let { name ->
     ConfirmDialog(
-      "Delete folder?", "\"$name\" and ${plural(all.count { it.folder == name }, "file")} inside go to Drive's Trash for 30 days, and are deleted from this phone.",
-      "Delete", danger = true, requireTyping = "confirm", onDismiss = { deleting = null },
+      stringResource(R.string.title_delete_folder_q), stringResource(R.string.msg_delete_drive_folder_body, name, plural(all.count { it.folder == name }, fileOneD, fileManyD)),
+      stringResource(R.string.action_delete), danger = true, requireTyping = stringResource(R.string.confirm_word), onDismiss = { deleting = null },
     ) { folderAct(name) { Backup.deleteFolder(name) } }
   }
 
   T(
-    if (picked != null) "Tap files to add or remove them." else "Hold a file to pick several.",
+    if (picked != null) stringResource(R.string.msg_tap_files_to_toggle) else stringResource(R.string.msg_hold_file_to_pick_several),
     Type.small.copy(fontSize = Type.small.fontSize * 0.9f), c.faint, Modifier.fillMaxWidth().padding(top = 12.dp), align = TextAlign.Center,
   )
 }

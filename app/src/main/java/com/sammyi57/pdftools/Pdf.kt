@@ -36,9 +36,15 @@ import kotlin.math.sin
 // pdf-lib engine, so a file comes out the same whichever app made it.
 
 /** A message meant for the person using the app, shown as is. */
-class UserError(message: String) : Exception(message)
+class UserError private constructor(private val text: String?, private val id: Int, private val args: Array<out Any>) : Exception() {
+  constructor(message: String) : this(message, 0, emptyArray())
+  // Resolved when read, so code that only throws (and the JVM unit tests) never needs a Context.
+  constructor(id: Int, vararg args: Any) : this(null, id, args)
+  override val message: String get() = text ?: appContext.getString(id, *args)
+}
 
 fun fail(message: String): Nothing = throw UserError(message)
+fun fail(id: Int, vararg args: Any): Nothing = throw UserError(id, *args)
 
 class Named(val name: String, val bytes: ByteArray)
 
@@ -54,9 +60,9 @@ typealias Box = List<Float>
 fun loadPdf(bytes: ByteArray): PDDocument = try {
   PDDocument.load(bytes)
 } catch (_: InvalidPasswordException) {
-  fail("This PDF is password-protected. Unlock it first.")
+  fail(appContext.getString(R.string.error_pdf_password_protected))
 } catch (_: Exception) {
-  fail("Could not read this PDF. The file may be damaged.")
+  fail(appContext.getString(R.string.error_pdf_unreadable))
 }
 
 fun PDDocument.bytes(): ByteArray = ByteArrayOutputStream().use { save(it); it.toByteArray() }
@@ -78,12 +84,12 @@ private fun pick(src: PDDocument, indices: List<Int>): ByteArray = PDDocument().
 // "1-3, 5, 8-" -> [[0,1,2],[4],[7..n-1]]
 fun parseRanges(str: String, n: Int): List<List<Int>> {
   val parts = str.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-  if (parts.isEmpty()) fail("Enter page ranges, e.g. 1-3, 5")
+  if (parts.isEmpty()) fail(R.string.error_enter_page_ranges)
   return parts.map { part ->
     val ab = part.split('-').map { it.trim() }
     val start = max(1, ab[0].toIntOrNull() ?: 1)
     val end = min(n, if (ab.size < 2) start else ab[1].toIntOrNull() ?: n)
-    if (start > end) fail("\"$part\" is outside pages 1–$n")
+    if (start > end) fail(R.string.error_range_outside_pages, part, n)
     (start - 1 until end).toList()
   }
 }
@@ -172,7 +178,7 @@ private val SIZE_STEPS = listOf(80 to 0, 60 to 2400, 45 to 2000, 35 to 1600, 25 
  */
 fun compressToSize(bytes: ByteArray, targetMB: String): ByteArray {
   val target = ((targetMB.toFloatOrNull() ?: 0f) * 1024 * 1024).toLong()
-  if (target <= 0) fail("Enter the size to fit under, in MB.")
+  if (target <= 0) fail(appContext.getString(R.string.error_enter_size_to_fit))
   if (bytes.size <= target) return compress(bytes, 80) // already fits: only the lossless tidy-up
   var best = bytes
   for ((q, side) in SIZE_STEPS) {
@@ -219,7 +225,7 @@ private fun norm(s: String) = s.lowercase().replace(Regex("\\s+"), "")
 
 fun splitByText(bytes: ByteArray, phrase: String): List<Named> {
   val needle = norm(phrase)
-  if (needle.isEmpty()) fail("Enter the phrase to split at.")
+  if (needle.isEmpty()) fail(appContext.getString(R.string.error_enter_phrase_to_split))
   return loadPdf(bytes).use { src ->
     val stripper = PDFTextStripper()
     val groups = ArrayList<MutableList<Int>>()
@@ -232,7 +238,7 @@ fun splitByText(bytes: ByteArray, phrase: String): List<Named> {
       if (groups.isEmpty() || (hit && groups.last().isNotEmpty())) groups.add(mutableListOf())
       groups.last().add(i)
     }
-    if (hits == 0) fail("\"$phrase\" wasn't found on any page. If this is a scan, run OCR Scanned PDF on it first.")
+    if (hits == 0) fail(appContext.getString(R.string.error_phrase_not_found, phrase))
     groups.mapIndexed { k, g -> Named("part-${k + 1}", pick(src, g)) }
   }
 }
@@ -245,12 +251,12 @@ fun splitByBookmarks(bytes: ByteArray): List<Named> = loadPdf(bytes).use { src -
   while (item != null && guard++ < 10000) {
     val page = runCatching { item.findDestinationPage(src) }.getOrNull()
     val i = page?.let { src.pages.indexOf(it) } ?: -1
-    if (i >= 0) marks.add((item.title?.takeIf { it.isNotBlank() } ?: "Section ${marks.size + 1}") to i)
+    if (i >= 0) marks.add((item.title?.takeIf { it.isNotBlank() } ?: appContext.getString(R.string.label_section_n, marks.size + 1)) to i)
     item = item.nextSibling
   }
-  if (marks.isEmpty()) fail("This PDF has no bookmarks to split by.")
+  if (marks.isEmpty()) fail(appContext.getString(R.string.error_no_bookmarks))
   marks.sortBy { it.second }
-  if (marks[0].second > 0) marks.add(0, "Front matter" to 0)
+  if (marks[0].second > 0) marks.add(0, appContext.getString(R.string.label_front_matter) to 0)
   val uniq = marks.filterIndexed { i, m -> i == 0 || m.second != marks[i - 1].second }
   uniq.mapIndexed { i, (title, page) -> Named(title, pick(src, (page until (uniq.getOrNull(i + 1)?.second ?: n)).toList())) }
 }
@@ -270,7 +276,7 @@ fun unrotate(b: Box, rot: Int): Box {
 fun splitHalf(bytes: ByteArray, mode: String): List<Named> = loadPdf(bytes).use { src ->
   val n = src.numberOfPages
   if (mode == "file") {
-    if (n < 2) fail("Need at least 2 pages to split in half.")
+    if (n < 2) fail(appContext.getString(R.string.error_need_2_pages))
     val h = (n + 1) / 2
     return@use listOf(Named("first-half", pick(src, (0 until h).toList())), Named("second-half", pick(src, (h until n).toList())))
   }
@@ -296,7 +302,7 @@ fun splitHalf(bytes: ByteArray, mode: String): List<Named> = loadPdf(bytes).use 
 
 fun splitBySize(bytes: ByteArray, maxMB: String): List<Named> {
   val limit = (maxMB.toFloatOrNull() ?: 0f) * 1024 * 1024
-  if (limit <= 0f) fail("Enter a size limit in MB.")
+  if (limit <= 0f) fail(appContext.getString(R.string.error_enter_size_limit))
   return loadPdf(bytes).use { src ->
     val parts = ArrayList<ByteArray>()
     var cur = mutableListOf<Int>()
@@ -380,7 +386,7 @@ fun flip(bytes: ByteArray, axis: String): ByteArray = loadPdf(bytes).use { src -
 private val GRID = mapOf("2" to (2 to 1), "4" to (2 to 2), "6" to (2 to 3), "9" to (3 to 3), "16" to (4 to 4))
 
 fun nUp(bytes: ByteArray, perSheet: String, lines: Boolean): ByteArray {
-  val (c0, r0) = GRID[perSheet] ?: fail("Choose 2, 4, 6, 9 or 16 pages per sheet.")
+  val (c0, r0) = GRID[perSheet] ?: fail(appContext.getString(R.string.error_choose_pages_per_sheet))
   return loadPdf(bytes).use { src ->
     PDDocument().use { out ->
       val shown = src.pages.map { out.embedShown(it) }
@@ -430,12 +436,12 @@ fun nUp(bytes: ByteArray, perSheet: String, lines: Boolean): ByteArray {
 // What to keep on a page, as fractions of the page as it is displayed, y from the top. Keyed by page index.
 fun cropResize(bytes: ByteArray, mode: String, size: String, boxes: Map<String, Box>): ByteArray = loadPdf(bytes).use { src ->
   if (mode == "crop") {
-    if (boxes.isEmpty()) fail("Pull a page’s corners in, or tap Auto crop, to choose what to keep.")
+    if (boxes.isEmpty()) fail(appContext.getString(R.string.error_pull_corners_or_auto_crop))
     src.pages.forEachIndexed { i, p ->
       val box = boxes[i.toString()] ?: return@forEachIndexed // pages you didn't crop are left at their full size
       val cb = p.cropBox
       val (x, y, w, h) = unrotate(box, p.rot)
-      if (w * cb.width < 1 || h * cb.height < 1) fail("The crop on page ${i + 1} is too small.")
+      if (w * cb.width < 1 || h * cb.height < 1) fail(appContext.getString(R.string.error_crop_too_small, i + 1))
       p.cropBox = PDRectangle(cb.lowerLeftX + x * cb.width, cb.lowerLeftY + y * cb.height, w * cb.width, h * cb.height)
     }
     return@use src.bytes()
@@ -483,9 +489,9 @@ private fun PDPageContentStream.putText(font: PDType1Font, size: Float, text: St
 }
 
 fun watermark(bytes: ByteArray, typed: String, opacity: Float, scale: Float): ByteArray {
-  if (typed.isBlank()) fail("Enter watermark text.")
+  if (typed.isBlank()) fail(appContext.getString(R.string.error_enter_watermark_text))
   val text = winAnsi(typed).trim()
-  if (text.isEmpty()) fail("Watermarks can only use Latin letters, numbers and common symbols.")
+  if (text.isEmpty()) fail(appContext.getString(R.string.error_watermark_latin_only))
   return loadPdf(bytes).use { doc ->
     val font = PDType1Font.HELVETICA_BOLD
     for (p in doc.pages) {
@@ -533,7 +539,7 @@ fun pageNumbers(bytes: ByteArray, position: String, format: String): ByteArray =
   val font = PDType1Font.HELVETICA
   val n = doc.numberOfPages
   doc.pages.forEachIndexed { i, p ->
-    val label = if (format == "of") "Page ${i + 1} of $n" else "${i + 1}"
+    val label = if (format == "of") appContext.getString(R.string.msg_page_x_of_n, i + 1, n) else "${i + 1}"
     val tw = font.getStringWidth(label) / 1000f * 10
     // Placed on the page as displayed, so a page saved sideways with /Rotate still gets its number upright at the
     // bottom: the baseline 20pt up, 28pt in from the side.
@@ -555,7 +561,7 @@ data class PageOrder(val i: Int, val rot: Int = 0, val del: Boolean = false) // 
 
 fun organize(bytes: ByteArray, all: List<PageOrder>): ByteArray {
   val order = all.filter { !it.del }
-  if (order.isEmpty()) fail("Keep at least one page.")
+  if (order.isEmpty()) fail(appContext.getString(R.string.error_keep_at_least_one_page))
   return loadPdf(bytes).use { src ->
     PDDocument().use { out ->
       for (o in order) out.adopt(src.getPage(o.i)).let { it.rotation = (it.rotation + o.rot) % 360 }
@@ -628,9 +634,9 @@ fun fillSign(bytes: ByteArray, items: List<SignItem>, images: Map<String, ByteAr
         val b = images[it.uri] ?: return@run null
         when {
           b.size > 1 && b[0] == 0x89.toByte() ->
-            LosslessFactory.createFromImage(doc, BitmapFactory.decodeByteArray(b, 0, b.size) ?: fail("Could not read the picture on page ${it.page + 1}."))
+            LosslessFactory.createFromImage(doc, BitmapFactory.decodeByteArray(b, 0, b.size) ?: fail(appContext.getString(R.string.error_could_not_read_picture, it.page + 1)))
           b.size > 1 && b[0] == 0xFF.toByte() && b[1] == 0xD8.toByte() -> JPEGFactory.createFromByteArray(doc, b)
-          else -> fail("The picture on page ${it.page + 1} isn't a JPEG or PNG. Pick a different one.")
+          else -> fail(appContext.getString(R.string.error_picture_not_jpeg_png, it.page + 1))
         }.also { x -> embedded[it.uri] = x }
       } ?: continue
       val w = it.w * dw

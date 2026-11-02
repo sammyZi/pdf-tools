@@ -21,6 +21,16 @@ lateinit var appContext: Context
 var hostActivity: MainActivity? = null
   private set
 
+/** A value built from string resources, rebuilt only when the app's language changes. */
+class PerLocale<T>(private val build: () -> T) {
+  @Volatile private var cached: Pair<java.util.Locale, T>? = null
+  fun get(): T {
+    val locale = appContext.resources.configuration.locales[0]
+    cached?.let { if (it.first == locale) return it.second }
+    return build().also { cached = locale to it }
+  }
+}
+
 class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)

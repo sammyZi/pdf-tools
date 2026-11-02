@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -66,10 +67,13 @@ import kotlin.math.min
 /** What an editor gets: the chosen PDF, the tool's options, an updater for them, and a way to report a problem. */
 class EditorProps(val file: Picked?, val value: Opts, val onChange: ((Opts) -> Opts) -> Unit, val onError: (String) -> Unit)
 
-private val EDITOR_TITLES = mapOf(
-  "organize" to "Arrange pages", "workflow" to "Add steps", "redact" to "Mark what to black out", "crop" to "Crop or resize", "fillSign" to "Fill in and sign",
-  "watermark" to "Options", "metadata" to "Details",
-)
+private val editorTitlesCache = PerLocale { mapOf(
+  "organize" to appContext.getString(R.string.editor_title_arrange_pages), "workflow" to appContext.getString(R.string.editor_title_add_steps),
+  "redact" to appContext.getString(R.string.editor_title_mark_blackout), "crop" to appContext.getString(R.string.editor_title_crop_or_resize),
+  "fillSign" to appContext.getString(R.string.editor_title_fill_and_sign),
+  "watermark" to appContext.getString(R.string.editor_title_options), "metadata" to appContext.getString(R.string.editor_title_details),
+) }
+private val EDITOR_TITLES: Map<String, String> get() = editorTitlesCache.get()
 
 @Composable
 private fun Editor(id: String, p: EditorProps) = when (id) {
@@ -83,29 +87,31 @@ private fun Editor(id: String, p: EditorProps) = when (id) {
   else -> Unit
 }
 
-private val DETAIL_FIELDS = listOf(
-  OptDef.Text("title", "Title", "", "Untitled"),
-  OptDef.Text("author", "Author", "", "Your name"),
-  OptDef.Text("subject", "Subject", "", "What it's about"),
-  OptDef.Text("keywords", "Keywords", "", "invoice, 2026, tax"),
-)
+private val detailFieldsCache = PerLocale { listOf(
+  OptDef.Text("title", appContext.getString(R.string.opt_detail_title_label), "", appContext.getString(R.string.opt_detail_title_placeholder)),
+  OptDef.Text("author", appContext.getString(R.string.opt_detail_author_label), "", appContext.getString(R.string.opt_detail_author_placeholder)),
+  OptDef.Text("subject", appContext.getString(R.string.opt_detail_subject_label), "", appContext.getString(R.string.opt_detail_subject_placeholder)),
+  OptDef.Text("keywords", appContext.getString(R.string.opt_detail_keywords_label), "", appContext.getString(R.string.opt_detail_keywords_placeholder)),
+) }
+private val DETAIL_FIELDS: List<OptDef> get() = detailFieldsCache.get()
 
 // The fields start as what the PDF says now, read once per file ("for" remembers which), so a resumed draft keeps
 // what was typed.
 @Composable
 private fun DetailsEditor(p: EditorProps) {
-  val file = p.file ?: return T("Choose a PDF to see and change its details.", Type.small, c.sub)
+  val file = p.file ?: return T(stringResource(R.string.msg_choose_pdf_for_details), Type.small, c.sub)
+  val readErr = stringResource(R.string.error_pdf_unreadable_short)
   LaunchedEffect(file.path) {
     if (p.value.str("for") == file.path) return@LaunchedEffect
     try {
       val now = withContext(Dispatchers.IO) { readDetails(File(file.path).readBytes()) }
       p.onChange { v -> now.entries.fold(v.with("for", file.path)) { acc, (k, s) -> acc.with(k, s) } }
     } catch (e: Exception) {
-      p.onError(e.message ?: "Could not read this PDF.")
+      p.onError(e.message ?: readErr)
     }
   }
   Options(DETAIL_FIELDS, p.value) { v -> p.onChange { v } }
-  T("Leave a field empty to remove it.", Type.small, c.sub)
+  T(stringResource(R.string.msg_leave_field_empty_to_remove), Type.small, c.sub)
 }
 
 private fun stripPdf(name: String) = name.replace(Regex("\\.pdf$", RegexOption.IGNORE_CASE), "")
@@ -164,6 +170,8 @@ fun ToolScreen(id: String, resume: Boolean) {
   }
   val pickDevice = { scope.launch { addFiles(pickPdfs(multi)) }; Unit }
 
+  val errTooBig = stringResource(R.string.error_pdf_too_big)
+  val errSomethingWrongPdf = stringResource(R.string.error_something_wrong_with_pdf)
   val exec = { mode: String ->
     scope.launch {
       busy = mode
@@ -185,9 +193,9 @@ fun ToolScreen(id: String, resume: Boolean) {
       } catch (e: UserError) {
         error = e.message ?: ""
       } catch (_: OutOfMemoryError) {
-        error = "This PDF is too big to work on in one go on this phone. Try splitting it first."
+        error = errTooBig
       } catch (e: Exception) {
-        error = e.message ?: "Something went wrong with this PDF."
+        error = e.message ?: errSomethingWrongPdf
       }
       busy = ""
     }
@@ -209,7 +217,7 @@ fun ToolScreen(id: String, resume: Boolean) {
   }
 
   Screen(bottom = 40.dp) {
-    BackBar("Tools") { nav.back() }
+    BackBar(stringResource(R.string.label_tools)) { nav.back() }
     // The tool's own glow card, like Home's: its picture on a Cool Blue tile (drawn in light colours whatever the theme,
     // so it reads on the dark card), the name in white and the description in Cool Blue.
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.card)).glow(c.hero, 0.95f, 1.15f).padding(18.dp)) {
@@ -218,16 +226,16 @@ fun ToolScreen(id: String, resume: Boolean) {
         Spacer(Modifier.size(14.dp))
         T(tool.title, Type.title.copy(fontSize = 23.sp, lineHeight = 30.sp), Color.White, Modifier.weight(1f))
         val pinned = tool.id in Pins.ids
-        IconBtn(if (pinned) I.pin else I.pinOutline, 22.dp, if (pinned) Brand.tangerine else Color.White, if (pinned) "Unpin from Home" else "Pin to top of Home") { Pins.toggle(tool.id) }
+        IconBtn(if (pinned) I.pin else I.pinOutline, 22.dp, if (pinned) Brand.tangerine else Color.White, if (pinned) stringResource(R.string.acc_unpin_from_home) else stringResource(R.string.acc_pin_to_top_of_home)) { Pins.toggle(tool.id) }
       }
       T(tool.desc, Type.body, Brand.cool.copy(alpha = 0.9f), Modifier.padding(top = 14.dp))
     }
 
-    StepHead(1, if (multi) "Choose PDFs" else "Choose a PDF")
+    StepHead(1, if (multi) stringResource(R.string.title_choose_pdfs) else stringResource(R.string.title_choose_pdf))
     if (files.isEmpty()) {
       Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        PickerCard("Device Storage", "Drive, Downloads, Phone", I.fileDocumentOutline, Brand.cool, Brand.cherry, Modifier.weight(1f), pickDevice)
-        PickerCard("App Files", if (Backup.state.enabled) "Saved here or in Drive" else "Saved in PDF Tools", I.folderOutline, c.accentSoft, c.accent, Modifier.weight(1f)) { appFiles = true }
+        PickerCard(stringResource(R.string.label_device_storage), stringResource(R.string.msg_drive_downloads_phone), I.fileDocumentOutline, Brand.cool, Brand.cherry, Modifier.weight(1f), pickDevice)
+        PickerCard(stringResource(R.string.label_app_files), if (Backup.state.enabled) stringResource(R.string.msg_saved_here_or_in_drive) else stringResource(R.string.msg_saved_in_pdf_tools), I.folderOutline, c.accentSoft, c.accent, Modifier.weight(1f)) { appFiles = true }
       }
     } else {
       Group(Modifier.animateContentSize()) {
@@ -235,28 +243,28 @@ fun ToolScreen(id: String, resume: Boolean) {
           Reorderable(files, { it.path }, changeFiles) { f, i, _ -> Box(Modifier.background(c.surface)) { FileRow(f, i, true, files.size, changeFiles, files) } }
         } else files.forEachIndexed { i, f -> FileRow(f, i, false, files.size, changeFiles, files) }
       }
-      if (multi && files.size > 1) T("Use the arrows, or hold a file and drag it, to change the order.", Type.small, c.sub, Modifier.padding(top = 8.dp))
+      if (multi && files.size > 1) T(stringResource(R.string.msg_use_arrows_or_drag), Type.small, c.sub, Modifier.padding(top = 8.dp))
       if (multi) {
         Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          Btn("Device", Modifier.weight(1f), I.plus, BtnKind.Secondary, height = 46.dp, onClick = pickDevice)
-          Btn("App Files", Modifier.weight(1f), I.folderOutline, BtnKind.Secondary, height = 46.dp) { appFiles = true }
+          Btn(stringResource(R.string.label_device), Modifier.weight(1f), I.plus, BtnKind.Secondary, height = 46.dp, onClick = pickDevice)
+          Btn(stringResource(R.string.label_app_files), Modifier.weight(1f), I.folderOutline, BtnKind.Secondary, height = 46.dp) { appFiles = true }
         }
       }
     }
 
     if (hasEditor || tool.opts.isNotEmpty()) {
-      StepHead(2, EDITOR_TITLES[tool.id] ?: "Options")
+      StepHead(2, EDITOR_TITLES[tool.id] ?: stringResource(R.string.editor_title_options))
       if (hasEditor) Editor(tool.id, EditorProps(files.firstOrNull(), opts, { fn -> opts = fn(opts) }) { error = it })
       else Options(tool.opts, opts) { opts = it }
     }
 
     Btn(
-      if (busy == "run") "${tool.doing}…" else tool.cta, Modifier.fillMaxWidth().padding(top = 28.dp), kind = BtnKind.Accent, busy = busy == "run",
+      if (busy == "run") stringResource(R.string.msg_doing_ellipsis, tool.doing) else tool.cta, Modifier.fillMaxWidth().padding(top = 28.dp), kind = BtnKind.Accent, busy = busy == "run",
       enabled = ready && busy != "preview",
     ) { exec("run") }
     if (!tool.noPreview) {
       Btn(
-        if (busy == "preview") "Preparing preview…" else "Preview result", Modifier.fillMaxWidth().padding(top = 10.dp), I.eyeOutline, BtnKind.Secondary,
+        if (busy == "preview") stringResource(R.string.msg_preparing_preview) else stringResource(R.string.action_preview_result), Modifier.fillMaxWidth().padding(top = 10.dp), I.eyeOutline, BtnKind.Secondary,
         busy = busy == "preview", enabled = ready && busy != "run",
       ) { exec("preview") }
     }
@@ -271,26 +279,27 @@ fun ToolScreen(id: String, resume: Boolean) {
 
     AnimatedVisibility(results.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = fadeOut()) {
       Column {
-        GroupLabel(if (results.size > 1) "${results.size} files saved" else "Saved", "Open Files", { nav.show(Tab.Files) })
+        GroupLabel(if (results.size > 1) stringResource(R.string.msg_files_saved_count, results.size) else stringResource(R.string.label_saved), stringResource(R.string.action_open_files), { nav.show(Tab.Files) })
+        val shareLabel = stringResource(R.string.action_share)
         Group {
           results.forEachIndexed { i, r ->
             ListRow(
               stem(r.name), first = i == 0, lead = { DocGlyph(kindOf(r.name)) }, marquee = true, onClick = { openFile(r.path, r.name) },
               subtitle = if (results.size == 1 && files.size == 1 && files[0].size != null) "${fmtSize(files[0].size)} → ${fmtSize(r.size)}" else fmtSize(r.size),
             ) {
-              T("Share", Type.label, modifier = Modifier.tap(shape = CircleShape, scaleTo = 0.92f) { share(r.path, r.name) }.border(1.dp, c.lineStrong, CircleShape).padding(horizontal = 14.dp, vertical = 7.dp))
+              T(shareLabel, Type.label, modifier = Modifier.tap(shape = CircleShape, scaleTo = 0.92f) { share(r.path, r.name) }.border(1.dp, c.lineStrong, CircleShape).padding(horizontal = 14.dp, vertical = 7.dp))
             }
           }
         }
         if (results.size > 1) {
-          Btn("Share all as one ZIP", Modifier.fillMaxWidth().padding(top = 10.dp), I.folderZipOutline, BtnKind.Secondary) {
+          Btn(stringResource(R.string.action_share_all_as_zip), Modifier.fillMaxWidth().padding(top = 10.dp), I.folderZipOutline, BtnKind.Secondary) {
             scope.launch {
               val z = withContext(Dispatchers.IO) { saveBytes("${files.firstOrNull()?.name?.let(::stripPdf) ?: "export"}-all", "zip", zipFiles(results.map { Named(it.name, File(it.path).readBytes()) })) }
               share(z.path, z.name)
             }
           }
         }
-        T("Use another file", Type.item, c.accent, Modifier.fillMaxWidth().padding(top = 18.dp).tap { changeFiles(emptyList()) }.padding(vertical = 4.dp), align = TextAlign.Center)
+        T(stringResource(R.string.action_use_another_file), Type.item, c.accent, Modifier.fillMaxWidth().padding(top = 18.dp).tap { changeFiles(emptyList()) }.padding(vertical = 4.dp), align = TextAlign.Center)
       }
     }
   }
@@ -301,7 +310,7 @@ fun ToolScreen(id: String, resume: Boolean) {
   }
   parts?.let { list ->
     // Preview of a tool that makes several files: one temp file at a time, so parts open one at a time.
-    AppDialog({ parts = null }, "Preview", "This makes ${plural(list.size, "file")}. Tap one to open it.") {
+    AppDialog({ parts = null }, stringResource(R.string.title_preview), stringResource(R.string.msg_this_makes_n_files, plural(list.size, stringResource(R.string.unit_file_one), stringResource(R.string.unit_file_many)))) {
       Group(Modifier.padding(top = 14.dp)) {
         list.forEachIndexed { i, p ->
           ListRow(stem(p.name), first = i == 0, lead = { DocGlyph() }, subtitle = fmtSize(p.bytes.size.toLong()), marquee = true, chevron = true, onClick = {
@@ -314,7 +323,7 @@ fun ToolScreen(id: String, resume: Boolean) {
   naming?.let { (outs, name) ->
     // Only Discard throws the result away; back or a stray tap outside keeps it under the suggested name.
     PromptDialog(
-      "Save as", name, if (outs.size > 1) "Each of the ${outs.size} files starts with this name." else "Saved in Files.", "File name", "Save", "Discard",
+      stringResource(R.string.title_save_as), name, if (outs.size > 1) stringResource(R.string.msg_each_file_starts_with_name, outs.size) else stringResource(R.string.msg_saved_in_files), stringResource(R.string.hint_file_name), stringResource(R.string.action_save), stringResource(R.string.action_discard),
       onClose = { naming = null }, onDismiss = { saveAs(outs, name) }, onSubmit = { saveAs(outs, it) },
     )
   }
@@ -350,10 +359,10 @@ private fun FileRow(f: Picked, i: Int, draggable: Boolean, count: Int, set: (Lis
       }
     },
   ) {
-    IconBtn(I.close, label = "Remove") { set(files.filter { it !== f }) }
+    IconBtn(I.close, label = stringResource(R.string.action_remove)) { set(files.filter { it !== f }) }
     if (draggable) {
-      IconBtn(I.chevronUp, color = if (i == 0) c.faint else c.ink, label = "Move earlier") { set(files.swap(i, i - 1)) }
-      IconBtn(I.chevronDown, color = if (i == count - 1) c.faint else c.ink, label = "Move later") { set(files.swap(i, i + 1)) }
+      IconBtn(I.chevronUp, color = if (i == 0) c.faint else c.ink, label = stringResource(R.string.acc_move_earlier)) { set(files.swap(i, i - 1)) }
+      IconBtn(I.chevronDown, color = if (i == count - 1) c.faint else c.ink, label = stringResource(R.string.acc_move_later)) { set(files.swap(i, i + 1)) }
     }
   }
 }
@@ -375,14 +384,14 @@ private fun PasswordDialog(file: Picked, onUnlock: (String) -> Unit, onSkip: () 
     }
     Unit
   }
-  AppDialog(onSkip, "Password-protected PDF", "Enter the password for “${stem(file.name)}” to use it here.") {
+  AppDialog(onSkip, stringResource(R.string.title_password_protected_pdf), stringResource(R.string.msg_enter_password_to_use_here, stem(file.name))) {
     Field(
-      password, { password = it; wrong = false }, Modifier.padding(top = 14.dp), "Password", secret = !shown, error = wrong, onDone = submit,
-    ) { IconBtn(if (shown) I.eyeOffOutline else I.eyeOutline, color = c.sub, label = if (shown) "Hide password" else "Show password") { shown = !shown } }
-    if (wrong) T("That password didn’t open it. Try again.", Type.small, c.accent, Modifier.padding(top = 6.dp))
+      password, { password = it; wrong = false }, Modifier.padding(top = 14.dp), stringResource(R.string.opt_password_label), secret = !shown, error = wrong, onDone = submit,
+    ) { IconBtn(if (shown) I.eyeOffOutline else I.eyeOutline, color = c.sub, label = if (shown) stringResource(R.string.acc_hide_password) else stringResource(R.string.acc_show_password)) { shown = !shown } }
+    if (wrong) T(stringResource(R.string.error_wrong_password), Type.small, c.accent, Modifier.padding(top = 6.dp))
     Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-      Btn("Skip", Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onSkip)
-      Btn("Unlock", Modifier.weight(1f), busy = busy, enabled = password.isNotEmpty(), onClick = submit)
+      Btn(stringResource(R.string.action_skip), Modifier.weight(1f), kind = BtnKind.Secondary, onClick = onSkip)
+      Btn(stringResource(R.string.action_unlock), Modifier.weight(1f), busy = busy, enabled = password.isNotEmpty(), onClick = submit)
     }
   }
 }
@@ -393,7 +402,7 @@ private fun PasswordDialog(file: Picked, onUnlock: (String) -> Unit, onSkip: () 
 private fun OrganizeEditor(p: EditorProps) {
   val file = p.file
   if (file == null) {
-    T("Your pages appear here once you choose a PDF.", Type.small, c.sub)
+    T(stringResource(R.string.msg_pages_appear_once_chosen), Type.small, c.sub)
     return
   }
   var pages by remember(file.path) { mutableStateOf<List<Pair<Int, Int>>?>(null) }
@@ -401,6 +410,7 @@ private fun OrganizeEditor(p: EditorProps) {
   val order = p.value.get<List<PageOrder>>("order") ?: emptyList()
   val set = { o: List<PageOrder> -> p.onChange { it.put("order", o) } }
   val restored = remember { mutableStateOf(order.isNotEmpty()) } // a resumed draft's order survives the first load
+  val readErr = stringResource(R.string.error_pdf_unreadable_or_protected)
 
   LaunchedEffect(file.path) {
     // Page sizes come from Android's PDF renderer, which reads a big PDF without parsing it all.
@@ -409,7 +419,7 @@ private fun OrganizeEditor(p: EditorProps) {
       pages = sizes
       if (restored.value) restored.value = false else set(sizes.indices.map { PageOrder(it) })
     } catch (_: Exception) {
-      p.onError("Could not read this PDF. It may be damaged or password-protected.")
+      p.onError(readErr)
     }
     thumbs = withContext(Dispatchers.IO) { runCatching { renderThumbs(file.path, 200) }.getOrNull() }
   }
@@ -420,8 +430,8 @@ private fun OrganizeEditor(p: EditorProps) {
   }
   val edit = { fn: (List<PageOrder>) -> List<PageOrder> -> p.onChange { v -> v.put("order", fn(v.get<List<PageOrder>>("order") ?: emptyList())) } }
   Row(Modifier.padding(bottom = 12.dp), verticalAlignment = Alignment.Top) {
-    T("Keeping ${order.count { !it.del }} of ${plural(sizes.size, "page")}. Hold a page to drag it.", Type.small, c.sub, Modifier.weight(1f))
-    T("Reset", Type.med, c.accent, Modifier.padding(start = 12.dp).tap(scaleTo = 0.92f) { set(sizes.indices.map { PageOrder(it) }) })
+    T(stringResource(R.string.msg_keeping_x_of_y_pages, order.count { !it.del }, plural(sizes.size, stringResource(R.string.unit_page_one), stringResource(R.string.unit_page_many))), Type.small, c.sub, Modifier.weight(1f))
+    T(stringResource(R.string.action_reset), Type.med, c.accent, Modifier.padding(start = 12.dp).tap(scaleTo = 0.92f) { set(sizes.indices.map { PageOrder(it) }) })
   }
   Reorderable(order, { it.i }, set, columns = 2, gap = 10.dp) { o, k, _ ->
     OrganizeTile(o, k, sizes.getOrNull(o.i), thumbs?.getOrNull(o.i),
@@ -457,10 +467,10 @@ private fun OrganizeTile(o: PageOrder, k: Int, size: Pair<Int, Int>?, thumb: Thu
       if (o.rot > 0) T("${o.rot}°", Type.label.copy(fontSize = 11.sp), Color.White, Modifier.align(Alignment.TopEnd).padding(6.dp).background(c.accent, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
     }
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceAround) {
-      if (o.del) IconBtn(I.restore, label = "Keep page ${o.i + 1}", onClick = onDelete)
+      if (o.del) IconBtn(I.restore, label = stringResource(R.string.acc_keep_page_n, o.i + 1), onClick = onDelete)
       else {
-        IconBtn(I.rotateRight, label = "Rotate page ${o.i + 1}", onClick = onRotate)
-        IconBtn(I.deleteOutline, label = "Remove page ${o.i + 1}, position ${k + 1}", onClick = onDelete)
+        IconBtn(I.rotateRight, label = stringResource(R.string.acc_rotate_page_n, o.i + 1), onClick = onRotate)
+        IconBtn(I.deleteOutline, label = stringResource(R.string.acc_remove_page_at_position, o.i + 1, k + 1), onClick = onDelete)
       }
     }
   }
@@ -473,6 +483,7 @@ private fun WatermarkEditor(p: EditorProps) {
   val file = p.file
   val text = winAnsi(p.value.str("text")).trim() // exactly what the stamp will say
   var page by remember(file?.path) { mutableStateOf<Triple<Pair<Float, Float>, Int, Thumb>?>(null) } // stored size, rotation, render
+  val readErr = stringResource(R.string.error_pdf_unreadable_short)
   LaunchedEffect(file?.path) {
     if (file == null) return@LaunchedEffect
     try {
@@ -483,13 +494,13 @@ private fun WatermarkEditor(p: EditorProps) {
         Triple(if (rot % 180 != 0) h.toFloat() to w.toFloat() else w.toFloat() to h.toFloat(), rot, renderThumbs(file.path, 480, 1)[0])
       }
     } catch (e: Exception) {
-      p.onError(e.message ?: "Could not read this PDF.")
+      p.onError(e.message ?: readErr)
     }
   }
   BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 120.dp).background(c.sunken, RoundedCornerShape(Radius.group)).padding(12.dp), contentAlignment = Alignment.Center) {
     val pg = page
     when {
-      file == null -> T("Choose a PDF to preview the watermark on its first page.", Type.small, c.sub, align = TextAlign.Center)
+      file == null -> T(stringResource(R.string.msg_choose_pdf_for_watermark_preview), Type.small, c.sub, align = TextAlign.Center)
       pg == null -> Spinner()
       else -> {
         val (stored, rot, t) = pg
@@ -516,7 +527,7 @@ private fun WatermarkEditor(p: EditorProps) {
       }
     }
   }
-  T("Preview · page 1", Type.small, c.sub, Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 14.dp), align = TextAlign.Center)
+  T(stringResource(R.string.msg_preview_page_1), Type.small, c.sub, Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 14.dp), align = TextAlign.Center)
   Options(toolById("watermark")!!.opts, p.value) { v -> p.onChange { v } }
 }
 
@@ -532,9 +543,9 @@ private fun WorkflowEditor(p: EditorProps) {
     Column(Modifier.fillMaxWidth().background(c.surface, shape).border(0.6.dp, c.lineStrong, shape).padding(start = 14.dp, end = 8.dp, top = 10.dp)) {
       Row(Modifier.padding(bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(24.dp).background(c.accent, CircleShape), contentAlignment = Alignment.Center) { T("${k + 1}", Type.label.copy(fontSize = 11.sp), Color.White) }
-        T(t?.stepTitle ?: "Unavailable step", Type.bold.copy(fontSize = 15.sp), modifier = Modifier.weight(1f).padding(start = 10.dp))
-        IconBtn(I.close, label = "Remove step") { set(steps.filter { it.id != step.id }) }
-        Box(handle.padding(7.dp)) { Icon(I.drag, 22.dp, c.faint, label = "Reorder") }
+        T(t?.stepTitle ?: stringResource(R.string.label_unavailable_step), Type.bold.copy(fontSize = 15.sp), modifier = Modifier.weight(1f).padding(start = 10.dp))
+        IconBtn(I.close, label = stringResource(R.string.acc_remove_step)) { set(steps.filter { it.id != step.id }) }
+        Box(handle.padding(7.dp)) { Icon(I.drag, 22.dp, c.faint, label = stringResource(R.string.acc_reorder)) }
       }
       Column(Modifier.padding(end = 6.dp)) {
         Options(t?.stepOpts ?: emptyList(), step.opts) { o -> set(steps.map { if (it.id == step.id) it.copy(opts = JsonObject(o)) else it }) }
@@ -542,8 +553,8 @@ private fun WorkflowEditor(p: EditorProps) {
     }
   }
   T(
-    if (steps.isNotEmpty()) "Steps run top to bottom. Merge and Mix combine all files; other steps run on each file. Drag the handles to reorder. Add another:"
-    else "Pick the steps to run, in order. Choose several PDFs to merge them first.",
+    if (steps.isNotEmpty()) stringResource(R.string.msg_workflow_steps_help)
+    else stringResource(R.string.msg_workflow_pick_steps_help),
     Type.small, c.sub, Modifier.padding(top = if (steps.isNotEmpty()) 12.dp else 0.dp, bottom = 10.dp),
   )
   FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

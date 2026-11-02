@@ -113,7 +113,7 @@ private fun embedImage(doc: PDDocument, path: String): PDImageXObject {
   val head = ByteArray(2)
   file.inputStream().use { it.read(head) }
   if (head[0] == 0xFF.toByte() && head[1] == 0xD8.toByte()) return file.inputStream().use { JPEGFactory.createFromStream(doc, it) }
-  val bitmap = BitmapFactory.decodeFile(file.path) ?: throw IllegalArgumentException("Could not read ${file.name}")
+  val bitmap = BitmapFactory.decodeFile(file.path) ?: throw IllegalArgumentException(appContext.getString(R.string.error_could_not_read_file, file.name))
   try {
     return JPEGFactory.createFromImage(doc, bitmap, 0.92f)
   } finally {

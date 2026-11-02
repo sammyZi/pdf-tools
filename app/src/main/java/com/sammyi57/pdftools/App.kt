@@ -70,6 +70,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -267,23 +268,26 @@ private fun ResumeBar(tool: Tool, files: Int) {
   val nav = LocalNav.current
   val shape = RoundedCornerShape(Radius.card)
   var confirming by remember { mutableStateOf(false) }
+  val fileOne = stringResource(R.string.unit_file_one)
+  val fileMany = stringResource(R.string.unit_file_many)
+  val discard = stringResource(R.string.action_discard)
   if (confirming) ConfirmDialog(
-    "Discard ${tool.title}?", "The ${plural(files, "file")} you picked and the options you set will be cleared. Your files themselves aren't touched.",
-    "Discard", danger = true, onDismiss = { confirming = false },
+    stringResource(R.string.title_discard_tool_q, tool.title), stringResource(R.string.msg_discard_tool_body, plural(files, fileOne, fileMany)),
+    discard, danger = true, onDismiss = { confirming = false },
   ) { Drafts.set(null) }
   Row(
     Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp).fillMaxWidth().shadow(10.dp, shape)
-      .tap(shape = shape, scaleTo = 0.98f, label = "Continue ${tool.title}") { nav.tool(tool.id, resume = true) }
+      .tap(shape = shape, scaleTo = 0.98f, label = stringResource(R.string.acc_continue_tool, tool.title)) { nav.tool(tool.id, resume = true) }
       .background(c.surface, shape).border(0.6.dp, c.lineStrong, shape).padding(8.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
     ArtTile(tool.id, 42.dp)
     Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
       T(tool.title, Type.bold, maxLines = 1)
-      T("Still open · ${plural(files, "file")}", Type.small.copy(fontSize = Type.small.fontSize * 0.93f), c.sub, maxLines = 1)
+      T(stringResource(R.string.msg_still_open, plural(files, fileOne, fileMany)), Type.small.copy(fontSize = Type.small.fontSize * 0.93f), c.sub, maxLines = 1)
     }
-    T("Discard", Type.label, c.sub, Modifier.tap(scaleTo = 0.9f) { confirming = true }.padding(horizontal = 10.dp, vertical = 8.dp))
-    Box(Modifier.background(c.ink, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp)) { T("Open", Type.label, c.onInk) }
+    T(discard, Type.label, c.sub, Modifier.tap(scaleTo = 0.9f) { confirming = true }.padding(horizontal = 10.dp, vertical = 8.dp))
+    Box(Modifier.background(c.ink, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp)) { T(stringResource(R.string.action_open), Type.label, c.onInk) }
   }
 }
 
@@ -293,7 +297,7 @@ private fun ResumeBar(tool: Tool, files: Int) {
 private fun NavPill(haze: HazeState) {
   val nav = LocalNav.current
   val slots = listOf<Pair<Tab?, Int>>(Tab.Tools to I.viewGridOutline, null to I.cameraPlusOutline, Tab.Files to I.folderOutline, Tab.Settings to I.cogOutline)
-  val labels = listOf("Tools", "Scan a document", "Files", "Settings")
+  val labels = listOf(stringResource(R.string.label_tools), stringResource(R.string.label_scan_document), stringResource(R.string.label_files), stringResource(R.string.title_settings))
   val pill = CircleShape
   val glass = c.panel
   // Black Cherry glass: enough colour to read over warm paper, see-through enough to show the blur.
@@ -370,7 +374,7 @@ fun DarkSurfaceBars() {
 @Composable
 fun BackBar(label: String, onBack: () -> Unit) {
   Row(
-    Modifier.padding(top = 4.dp, bottom = 10.dp).offset(x = (-8).dp).tap(shape = CircleShape, scaleTo = 0.94f, label = "Back", onClick = onBack)
+    Modifier.padding(top = 4.dp, bottom = 10.dp).offset(x = (-8).dp).tap(shape = CircleShape, scaleTo = 0.94f, label = stringResource(R.string.action_back), onClick = onBack)
       .padding(vertical = 6.dp, horizontal = 4.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {

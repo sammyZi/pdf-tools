@@ -60,13 +60,26 @@ data class ScanDoc(
   val saved: SavedScan? = null, // state at the last Save PDF, for "Discard changes"
 )
 
-val KIND_LABEL = linkedMapOf("whiteboard" to "Whiteboard", "book" to "Book", "doc" to "Document", "id" to "ID card", "card" to "Business card")
-val FILTERS = listOf("original" to "Original color", "auto" to "Auto-color", "light" to "Light text", "gray" to "Grayscale", "whiteboard" to "Whiteboard")
-val PAGE_SIZES = listOf(
-  "fit" to "Original size", "A4-portrait" to "A4 Portrait", "A4-landscape" to "A4 Landscape", "A5-portrait" to "A5 Portrait",
-  "A5-landscape" to "A5 Landscape", "Letter-portrait" to "Letter Portrait", "Letter-landscape" to "Letter Landscape",
-  "Legal-portrait" to "Legal Portrait", "Legal-landscape" to "Legal Landscape",
-)
+private val kindLabelCache = PerLocale { linkedMapOf(
+  "whiteboard" to appContext.getString(R.string.scan_kind_whiteboard), "book" to appContext.getString(R.string.scan_kind_book),
+  "doc" to appContext.getString(R.string.scan_kind_document), "id" to appContext.getString(R.string.scan_kind_id_card),
+  "card" to appContext.getString(R.string.scan_kind_business_card),
+) }
+val KIND_LABEL: Map<String, String> get() = kindLabelCache.get()
+private val filtersCache = PerLocale { listOf(
+  "original" to appContext.getString(R.string.scan_filter_original_color), "auto" to appContext.getString(R.string.scan_filter_auto_color),
+  "light" to appContext.getString(R.string.scan_filter_light_text), "gray" to appContext.getString(R.string.scan_filter_grayscale),
+  "whiteboard" to appContext.getString(R.string.scan_filter_whiteboard),
+) }
+val FILTERS: List<Pair<String, String>> get() = filtersCache.get()
+private val pageSizesCache = PerLocale { listOf(
+  "fit" to appContext.getString(R.string.page_size_original), "A4-portrait" to appContext.getString(R.string.page_size_a4_portrait),
+  "A4-landscape" to appContext.getString(R.string.page_size_a4_landscape), "A5-portrait" to appContext.getString(R.string.page_size_a5_portrait),
+  "A5-landscape" to appContext.getString(R.string.page_size_a5_landscape), "Letter-portrait" to appContext.getString(R.string.page_size_letter_portrait),
+  "Letter-landscape" to appContext.getString(R.string.page_size_letter_landscape),
+  "Legal-portrait" to appContext.getString(R.string.page_size_legal_portrait), "Legal-landscape" to appContext.getString(R.string.page_size_legal_landscape),
+) }
+val PAGE_SIZES: List<Pair<String, String>> get() = pageSizesCache.get()
 
 fun uid(): String = java.lang.Long.toString(System.currentTimeMillis(), 36) + (1..5).map { "abcdefghijklmnopqrstuvwxyz0123456789".random() }.joinToString("")
 
@@ -75,7 +88,7 @@ private fun dirOf(id: String) = File(scansRoot(), id).apply { mkdirs() }
 
 fun newDoc(): ScanDoc {
   val d = Calendar.getInstance()
-  val name = "Scan ${d.get(Calendar.YEAR)}-${pad2(d.get(Calendar.MONTH) + 1)}-${pad2(d.get(Calendar.DAY_OF_MONTH))} ${pad2(d.get(Calendar.HOUR_OF_DAY))}.${pad2(d.get(Calendar.MINUTE))}"
+  val name = "${appContext.getString(R.string.doc_default_name_prefix)} ${d.get(Calendar.YEAR)}-${pad2(d.get(Calendar.MONTH) + 1)}-${pad2(d.get(Calendar.DAY_OF_MONTH))} ${pad2(d.get(Calendar.HOUR_OF_DAY))}.${pad2(d.get(Calendar.MINUTE))}"
   return ScanDoc(uid(), name, System.currentTimeMillis(), System.currentTimeMillis(), emptyList())
 }
 
@@ -167,7 +180,7 @@ object ScanPrefs {
 
 /** Builds the PDF into Files. Re-saving an edited scan replaces its earlier PDF under the same name. */
 suspend fun exportPdf(doc: ScanDoc): ScanDoc = withContext(Dispatchers.IO) {
-  if (doc.pages.isEmpty()) fail("At least one page is required to create a PDF.")
+  if (doc.pages.isEmpty()) fail(appContext.getString(R.string.msg_at_least_one_page_required))
   val images = ArrayList<String>()
   val sheets = doc.pages.flatMap { p ->
     val first = images.size

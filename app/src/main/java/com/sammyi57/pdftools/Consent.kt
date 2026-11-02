@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -99,8 +100,6 @@ Google Drive backup is optional and is governed by Google's own terms of service
 7. Changes
 If these terms change, the app will ask you to accept them again. Continuing to use it means you accept the version shown."""
 
-private val DOCS = mapOf("privacy" to ("Privacy Policy" to PRIVACY), "terms" to ("Terms & Conditions" to TERMS))
-
 /** First launch: a short tour, then the terms. Reading the terms again from Settings goes straight to them. */
 @Composable
 fun Consent(onAccept: (() -> Unit)? = null, onClose: (() -> Unit)? = null) {
@@ -114,12 +113,14 @@ private fun ConsentBody(onAccept: (() -> Unit)?, onClose: (() -> Unit)?) {
   var privacy by remember { mutableStateOf(false) }
   var terms by remember { mutableStateOf(false) }
   if (onClose != null) BackHandler(doc == null, onClose)
+  val privacyTitle = stringResource(R.string.title_privacy_policy)
+  val termsTitle = stringResource(R.string.title_terms_conditions)
 
   Box(Modifier.fillMaxSize().background(c.bg)) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
       if (onClose != null) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
-          IconBtn(I.close, 24.dp, label = "Close", onClick = onClose)
+          IconBtn(I.close, 24.dp, label = stringResource(R.string.action_close), onClick = onClose)
         }
       }
       Column(
@@ -133,10 +134,16 @@ private fun ConsentBody(onAccept: (() -> Unit)?, onClose: (() -> Unit)?) {
             .clip(RoundedCornerShape(26.dp)).glow(c.hero, 0.85f, 1f),
           contentAlignment = Alignment.Center,
         ) { Icon(I.filePdfBox, 46.dp, Color.White) }
-        T("PDF Tools", Type.largeTitle, modifier = Modifier.padding(top = 18.dp))
-        T("Your documents never leave this phone.", Type.body, c.sub, Modifier.padding(top = 4.dp), align = TextAlign.Center)
+        T(stringResource(R.string.app_name), Type.largeTitle, modifier = Modifier.padding(top = 18.dp))
+        T(stringResource(R.string.msg_documents_stay_on_phone), Type.body, c.sub, Modifier.padding(top = 4.dp), align = TextAlign.Center)
+        val points = listOf(
+          I.cellphoneLock to stringResource(R.string.onboarding_point_on_device),
+          I.accountOffOutline to stringResource(R.string.onboarding_point_no_tracking),
+          I.googleDrive to stringResource(R.string.onboarding_point_drive_optional),
+          I.wifiOff to stringResource(R.string.onboarding_point_offline),
+        )
         Column(Modifier.fillMaxWidth().padding(top = 30.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-          POINTS.forEachIndexed { i, (glyph, label) -> Stagger(i) { Row(verticalAlignment = Alignment.CenterVertically) {
+          points.forEachIndexed { i, (glyph, label) -> Stagger(i) { Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(34.dp).background(c.sunken, RoundedCornerShape(Radius.tile)), contentAlignment = Alignment.Center) { Icon(glyph, 18.dp, c.sub) }
             Spacer(Modifier.size(12.dp))
             T(label, Type.body.copy(fontSize = Type.body.fontSize * 0.97f))
@@ -145,26 +152,27 @@ private fun ConsentBody(onAccept: (() -> Unit)?, onClose: (() -> Unit)?) {
       }
       Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 8.dp)) {
         if (onAccept != null) {
-          Tick(privacy, "I have read the", "Privacy Policy", { privacy = !privacy }) { doc = "privacy" }
-          Tick(terms, "I agree to the", "Terms & Conditions", { terms = !terms }) { doc = "terms" }
-          Btn("Continue", Modifier.fillMaxWidth().padding(top = 14.dp), enabled = privacy && terms, onClick = onAccept)
+          Tick(privacy, stringResource(R.string.label_i_have_read_the), privacyTitle, { privacy = !privacy }) { doc = "privacy" }
+          Tick(terms, stringResource(R.string.label_i_agree_to_the), termsTitle, { terms = !terms }) { doc = "terms" }
+          Btn(stringResource(R.string.action_continue), Modifier.fillMaxWidth().padding(top = 14.dp), enabled = privacy && terms, onClick = onAccept)
         } else {
-          T("Privacy Policy", Type.item, c.accent, Modifier.tap { doc = "privacy" }.padding(vertical = 11.dp))
-          T("Terms & Conditions", Type.item, c.accent, Modifier.tap { doc = "terms" }.padding(vertical = 11.dp))
+          T(privacyTitle, Type.item, c.accent, Modifier.tap { doc = "privacy" }.padding(vertical = 11.dp))
+          T(termsTitle, Type.item, c.accent, Modifier.tap { doc = "terms" }.padding(vertical = 11.dp))
         }
-        T("Last updated ${Terms.UPDATED}", Type.small, c.faint, Modifier.fillMaxWidth().padding(top = 14.dp), align = TextAlign.Center)
+        T(stringResource(R.string.msg_last_updated, Terms.UPDATED), Type.small, c.faint, Modifier.fillMaxWidth().padding(top = 14.dp), align = TextAlign.Center)
       }
     }
 
     AnimatedVisibility(doc != null, enter = slideInVertically(tween(380)) { it }, exit = slideOutVertically(tween(300)) { it }) {
       val shown = remember { mutableStateOf(doc) }
       if (doc != null) shown.value = doc
-      val (title, body) = DOCS.getValue(shown.value ?: "privacy")
+      val title = if ((shown.value ?: "privacy") == "privacy") privacyTitle else termsTitle
+      val body = stringResource(if ((shown.value ?: "privacy") == "privacy") R.string.privacy_policy_body else R.string.terms_body)
       BackHandler { doc = null }
       Column(Modifier.fillMaxSize().background(c.bg).statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(start = 20.dp, end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           T(title, Type.title.copy(fontSize = Type.title.fontSize * 0.75f), modifier = Modifier.weight(1f))
-          IconBtn(I.close, 24.dp, label = "Close") { doc = null }
+          IconBtn(I.close, 24.dp, label = stringResource(R.string.action_close)) { doc = null }
         }
         T(body, Type.small.copy(fontSize = Type.small.fontSize * 1.07f, lineHeight = Type.small.lineHeight * 1.15f), c.sub,
           Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 40.dp))

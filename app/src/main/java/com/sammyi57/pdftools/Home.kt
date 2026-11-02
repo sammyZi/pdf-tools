@@ -40,6 +40,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -65,29 +66,31 @@ fun Home() {
   var section by rememberSaveable { mutableStateOf(-1) } // -1: every section
 
   Screen {
-    LargeTitle("Tools", "${TOOLS.size} tools. Everything runs on this phone.")
-    SearchField(q, { q = it }, "Merge, split, compress…")
+    LargeTitle(stringResource(R.string.label_tools), stringResource(R.string.msg_tools_count_sub, TOOLS.size))
+    SearchField(q, { q = it }, stringResource(R.string.hint_search_tools))
 
     if (!searching) {
       Stagger(0) { Hero(files) { nav.scan() } }
       if (files.isNotEmpty()) Stagger(1) { RecentPanel(files.take(3)) { nav.show(Tab.Files) } }
+      val allTools = stringResource(R.string.label_all_tools)
       Row(
         Modifier.padding(top = 22.dp).horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Chip("All tools", section == -1) { section = -1 }
+        Chip(allTools, section == -1) { section = -1 }
         sections.forEach { si -> Chip(SECTIONS[si], section == si) { section = si } }
       }
     }
 
     if (found.isNotEmpty()) {
-      GroupLabel("Files", "All files", { nav.show(Tab.Files) })
+      GroupLabel(stringResource(R.string.label_files), stringResource(R.string.action_all_files), { nav.show(Tab.Files) })
       Group {
+        val shareLabel = stringResource(R.string.action_share)
         found.take(5).forEachIndexed { i, f ->
           ListRow(
             stem(f.name), first = i == 0, lead = { DocGlyph(kindOf(f.name)) }, marquee = true,
             subtitle = "${fmtSize(f.size)} · ${fmtDate(f.modified)}", onClick = { openFile(f.path, f.name) },
-          ) { IconBtn(I.shareVariantOutline, 18.dp, c.sub, "Share") { share(f.path, f.name) } }
+          ) { IconBtn(I.shareVariantOutline, 18.dp, c.sub, shareLabel) { share(f.path, f.name) } }
         }
       }
     }
@@ -97,7 +100,7 @@ fun Home() {
     if (!searching && section == -1 && pinned.isNotEmpty()) {
       Stagger(2) {
         Column {
-          GroupLabel("Pinned · ${pinned.size}")
+          GroupLabel(stringResource(R.string.label_pinned_count, pinned.size))
           ToolGrid(pinned, shared = false) { nav.tool(it.id) } // the section below owns the flying art
         }
       }
@@ -109,37 +112,41 @@ fun Home() {
       if (items.isEmpty()) return@forEachIndexed
       Stagger(si + 3) {
         Column {
-          GroupLabel("$name · ${items.size}")
+          GroupLabel(stringResource(R.string.msg_section_count, name, items.size))
           ToolGrid(items) { nav.tool(it.id) }
         }
       }
     }
 
     if (tools.isEmpty() && found.isEmpty()) {
-      T("No tools or files match \"${q.trim()}\". Try \"merge\", \"split\" or \"compress\".", Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 40.dp, start = 24.dp, end = 24.dp), align = TextAlign.Center)
+      T(stringResource(R.string.msg_no_tools_or_files_match, q.trim()), Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 40.dp, start = 24.dp, end = 24.dp), align = TextAlign.Center)
     }
   }
 }
 
+@Composable
 private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
-  in 5..11 -> "Good morning!"
-  in 12..16 -> "Good afternoon!"
-  else -> "Good evening!"
+  in 5..11 -> stringResource(R.string.greeting_morning)
+  in 12..16 -> stringResource(R.string.greeting_afternoon)
+  else -> stringResource(R.string.greeting_evening)
 }
 
 // The loud card: a warm gradient and one plain sentence about what's on the phone, with little icons in the words.
 @Composable
 private fun Hero(files: List<Saved>, onScan: () -> Unit) {
   val shape = RoundedCornerShape(Radius.hero)
-  val today = files.count { dayLabel(it.modified).startsWith("Today") }
+  val today = files.count { isToday(it.modified) }
   val bytes = files.sumOf { it.size }
   val soft = Brand.cool
   // Short on purpose: the numbers sit in the stats row below, so the sentence only says hello and points at the camera.
+  val hello = greeting()
+  val readyPrefix = stringResource(R.string.hero_ready_prefix)
+  val readySuffix = stringResource(R.string.hero_ready_suffix)
   val sentence = buildAnnotatedString {
-    withStyle(SpanStyle(color = Color.White)) { append(greeting()) }
-    withStyle(SpanStyle(color = soft)) { append(" Ready to ") }
+    withStyle(SpanStyle(color = Color.White)) { append(hello) }
+    withStyle(SpanStyle(color = soft)) { append(readyPrefix) }
     appendInlineContent("cam", "[camera]")
-    withStyle(SpanStyle(color = Color.White)) { append(" scan?") }
+    withStyle(SpanStyle(color = Color.White)) { append(readySuffix) }
   }
   // Sized in sp like the words, so it follows the font scale. The glyph's body spans 2..20 of its 24 box: dropping it by
   // 4/24 sits the camera on the baseline, about as tall as a capital.
@@ -156,7 +163,7 @@ private fun Hero(files: List<Saved>, onScan: () -> Unit) {
     },
   )
   Column(
-    Modifier.padding(top = 16.dp).fillMaxWidth().tap(shape = shape, scaleTo = 0.98f, label = "Scan a document", onClick = onScan)
+    Modifier.padding(top = 16.dp).fillMaxWidth().tap(shape = shape, scaleTo = 0.98f, label = stringResource(R.string.label_scan_document), onClick = onScan)
       .clip(shape).glow(c.hero, 0.9f, 1.05f).padding(22.dp), // Black Cherry with Tangerine rising from the bottom right
   ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -165,7 +172,7 @@ private fun Hero(files: List<Saved>, onScan: () -> Unit) {
         Row(Modifier.background(Color.White.copy(alpha = 0.16f), CircleShape).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
           Icon(I.googleDrive, 14.dp, Color.White)
           Spacer(Modifier.size(5.dp))
-          T(if (Backup.syncing) "Syncing" else "Synced", Type.num, Color.White)
+          T(if (Backup.syncing) stringResource(R.string.badge_syncing) else stringResource(R.string.badge_synced), Type.num, Color.White)
         }
       }
     }
@@ -173,14 +180,14 @@ private fun Hero(files: List<Saved>, onScan: () -> Unit) {
     Spacer(Modifier.height(26.dp))
     Row(verticalAlignment = Alignment.Bottom) {
       Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Stat("Today", plural(today, "file"))
-        Stat("On phone", fmtSize(bytes).ifEmpty { "0 KB" })
+        Stat(stringResource(R.string.label_today), plural(today, stringResource(R.string.unit_file_one), stringResource(R.string.unit_file_many)))
+        Stat(stringResource(R.string.label_on_phone), fmtSize(bytes).ifEmpty { stringResource(R.string.label_zero_kb) })
       }
       Row(
         Modifier.background(Brand.cool, CircleShape).padding(start = 14.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        T("Open camera", Type.label, Brand.cherry)
+        T(stringResource(R.string.action_open_camera), Type.label, Brand.cherry)
         Spacer(Modifier.size(4.dp))
         Icon(I.arrowRight, 16.dp, Brand.cherry)
       }
@@ -216,7 +223,7 @@ private fun ToolCard(t: Tool, modifier: Modifier, shared: Boolean, onClick: () -
     }
     // Always there, so pinning is found without a hidden long-press: faint outline off, solid Tangerine on.
     Box(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
-      IconBtn(if (pinned) I.pin else I.pinOutline, 18.dp, if (pinned) c.accent else c.faint, if (pinned) "Unpin ${t.title}" else "Pin ${t.title} to the top") { Pins.toggle(t.id) }
+      IconBtn(if (pinned) I.pin else I.pinOutline, 18.dp, if (pinned) c.accent else c.faint, if (pinned) stringResource(R.string.acc_unpin_tool, t.title) else stringResource(R.string.acc_pin_tool_to_top, t.title)) { Pins.toggle(t.id) }
     }
   }
 }
@@ -238,12 +245,14 @@ private fun RecentPanel(recent: List<Saved>, onAll: () -> Unit) {
   val dim = ink.copy(alpha = 0.62f)
   Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(shape).background(Brand.cool, shape).grain().padding(start = 16.dp, end = 10.dp, top = 12.dp, bottom = 6.dp)) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-      T("RECENT", Type.caption, dim, Modifier.weight(1f))
-      T("All files", Type.small, dim, Modifier.tap(scaleTo = 0.92f, onClick = onAll).padding(horizontal = 6.dp, vertical = 2.dp))
+      T(stringResource(R.string.label_recent_caps), Type.caption, dim, Modifier.weight(1f))
+      T(stringResource(R.string.action_all_files), Type.small, dim, Modifier.tap(scaleTo = 0.92f, onClick = onAll).padding(horizontal = 6.dp, vertical = 2.dp))
     }
+    val openLabel = stringResource(R.string.acc_open_file)
+    val shareLabel = stringResource(R.string.action_share)
     recent.forEach { f ->
       Row(
-        Modifier.fillMaxWidth().tap(scaleTo = 0.98f, label = "Open ${stem(f.name)}") { openFile(f.path, f.name) }.padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().tap(scaleTo = 0.98f, label = openLabel.format(stem(f.name))) { openFile(f.path, f.name) }.padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Column(Modifier.weight(1f)) {
@@ -251,7 +260,7 @@ private fun RecentPanel(recent: List<Saved>, onAll: () -> Unit) {
           T("${kindOf(f.name).name.uppercase()} · ${fmtSize(f.size)} · ${fmtDate(f.modified)}", Type.small.copy(fontSize = 11.5.sp, lineHeight = 15.sp), dim, maxLines = 1)
         }
         Spacer(Modifier.size(8.dp))
-        RoundBtn(I.shareVariantOutline, ink, Brand.cool, 34.dp, "Share") { share(f.path, f.name) }
+        RoundBtn(I.shareVariantOutline, ink, Brand.cool, 34.dp, shareLabel) { share(f.path, f.name) }
       }
     }
   }

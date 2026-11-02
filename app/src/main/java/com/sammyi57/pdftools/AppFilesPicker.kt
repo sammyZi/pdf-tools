@@ -26,6 +26,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -40,6 +42,7 @@ private data class Entry(val name: String, val path: String, val size: Long, val
 @Composable
 fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, onSelect: (List<Picked>) -> Unit) {
   val scope = rememberCoroutineScope()
+  val context = LocalContext.current
   var onDrive by remember { mutableStateOf(false) }
   var folder by remember { mutableStateOf<String?>(null) } // folder name
   var query by remember { mutableStateOf("") }
@@ -87,7 +90,7 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
         for (p in list) {
           val f = byId[p.path]
           if (f == null) { out.add(p); continue }
-          busy = "Getting “${stem(f.name)}” from Drive…"
+          busy = context.getString(R.string.msg_fetching_from_drive, stem(f.name))
           out.add(Backup.fetch(f))
         }
         busy = ""
@@ -105,28 +108,28 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
     Column(Modifier.fillMaxSize()) {
       Column(Modifier.background(c.surface).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-          if (folder != null && needle.isEmpty()) IconBtn(I.arrowLeft, 24.dp, label = "Back") { folder = null }
+          if (folder != null && needle.isEmpty()) IconBtn(I.arrowLeft, 24.dp, label = stringResource(R.string.action_back)) { folder = null }
           else Box(Modifier.size(40.dp).background(c.accentSoft, RoundedCornerShape(Radius.control)), contentAlignment = Alignment.Center) { Icon(I.folderOutline, 24.dp, c.accent) }
           Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(if (multi) "Select PDFs" else "Select a PDF", Type.title.copy(fontSize = Type.title.fontSize * 0.72f))
+            T(if (multi) stringResource(R.string.title_select_pdfs) else stringResource(R.string.title_select_pdf), Type.title.copy(fontSize = Type.title.fontSize * 0.72f))
             T(
               when {
-                needle.isNotEmpty() -> "Search in App Files"
+                needle.isNotEmpty() -> stringResource(R.string.label_search_in_app_files)
                 folder != null -> folder!!
-                onDrive -> "Google Drive · PDF Tools folder"
-                else -> "App Files · Saved documents"
+                onDrive -> stringResource(R.string.label_google_drive_folder)
+                else -> stringResource(R.string.label_app_files_saved)
               },
               Type.small, c.sub, maxLines = 1,
             )
           }
-          IconBtn(I.close, 22.dp, label = "Close", onClick = onClose)
+          IconBtn(I.close, 22.dp, label = stringResource(R.string.action_close), onClick = onClose)
         }
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
           if (Backup.state.enabled) {
-            Segmented(listOf(false to "This phone", true to "Google Drive"), onDrive, icons = listOf(I.cellphone, I.googleDrive)) { if (it != onDrive) showSource(it) }
+            Segmented(listOf(false to stringResource(R.string.label_this_phone), true to stringResource(R.string.label_google_drive)), onDrive, icons = listOf(I.cellphone, I.googleDrive)) { if (it != onDrive) showSource(it) }
             Spacer(Modifier.height(10.dp))
           }
-          SearchField(query, { query = it }, if (onDrive) "Search Drive PDFs…" else "Search saved PDFs…")
+          SearchField(query, { query = it }, if (onDrive) stringResource(R.string.hint_search_drive_pdfs) else stringResource(R.string.hint_search_saved_pdfs))
         }
       }
       AnimatedVisibility(busy.isNotEmpty() || problem.isNotEmpty()) {
@@ -136,16 +139,18 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
         }
       }
 
+      val pdfOne = stringResource(R.string.unit_pdf_one)
+      val pdfMany = stringResource(R.string.unit_pdf_many)
       Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) {
         if (onDrive && drive == null && problem.isEmpty()) {
           Spinner(c.accent, modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally))
           return@Column
         }
         if (needle.isEmpty() && folder == null && folders.isNotEmpty()) {
-          GroupLabel("Folders", first = true)
+          GroupLabel(stringResource(R.string.label_folders), first = true)
           Group {
             folders.forEachIndexed { i, (name, n) ->
-              ListRow(name, first = i == 0, lead = { FolderGlyph(32.dp) }, subtitle = plural(n, "PDF"), chevron = true, onClick = { folder = name })
+              ListRow(name, first = i == 0, lead = { FolderGlyph(32.dp) }, subtitle = plural(n, pdfOne, pdfMany), chevron = true, onClick = { folder = name })
             }
           }
         }
@@ -153,12 +158,12 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
           val allOn = shown.all { it.path in selected }
           GroupLabel(
             when {
-              needle.isNotEmpty() -> "${plural(shown.size, "PDF")} found"
+              needle.isNotEmpty() -> stringResource(R.string.msg_count_found, plural(shown.size, pdfOne, pdfMany))
               folder != null -> folder!!
-              folders.isNotEmpty() -> "Files in Root"
-              else -> "All Saved PDFs"
+              folders.isNotEmpty() -> stringResource(R.string.label_files_in_root)
+              else -> stringResource(R.string.label_all_saved_pdfs)
             },
-            if (multi) (if (allOn) "Deselect all" else "Select all") else null,
+            if (multi) (if (allOn) stringResource(R.string.action_deselect_all) else stringResource(R.string.action_select_all)) else null,
             {
               selected = if (allOn) selected - shown.map { it.path }.toSet() else selected + shown.associate { it.path to Picked(it.name, it.path, it.size) }
             },
@@ -180,12 +185,12 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
         } else {
           Empty(
             { ToolArt("files", 80.dp) },
-            when { needle.isNotEmpty() -> "No matching PDFs"; folder != null -> "This folder is empty"; else -> "No saved PDFs found" },
+            when { needle.isNotEmpty() -> stringResource(R.string.title_no_matching_pdfs); folder != null -> stringResource(R.string.title_folder_empty); else -> stringResource(R.string.title_no_saved_pdfs) },
             when {
-              needle.isNotEmpty() -> "No PDF files found matching \"$query\"."
-              folder != null -> "PDFs saved or moved into this folder will appear here."
-              onDrive -> "PDFs in the PDF Tools folder of your Google Drive will appear here."
-              else -> "PDFs saved from your tools will appear here."
+              needle.isNotEmpty() -> stringResource(R.string.msg_no_pdfs_matching, query)
+              folder != null -> stringResource(R.string.msg_pdfs_appear_in_folder)
+              onDrive -> stringResource(R.string.msg_pdfs_appear_drive)
+              else -> stringResource(R.string.msg_pdfs_appear_tools)
             },
           )
         }
@@ -194,10 +199,10 @@ fun AppFilesPicker(multi: Boolean, already: List<String>, onClose: () -> Unit, o
       if (multi) {
         Row(Modifier.fillMaxWidth().background(c.surface).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
           Column(Modifier.weight(1f)) {
-            T(if (selected.isNotEmpty()) "${plural(selected.size, "PDF")} selected" else "None selected", Type.bold)
-            if (selected.isNotEmpty()) T("Clear all", Type.small, c.accent, Modifier.tap { selected = emptyMap() })
+            T(if (selected.isNotEmpty()) stringResource(R.string.msg_count_selected, plural(selected.size, pdfOne, pdfMany)) else stringResource(R.string.label_none_selected), Type.bold)
+            if (selected.isNotEmpty()) T(stringResource(R.string.action_clear_all), Type.small, c.accent, Modifier.tap { selected = emptyMap() })
           }
-          Btn(if (selected.isNotEmpty()) "Add (${selected.size})" else "Select PDFs", enabled = selected.isNotEmpty(), busy = busy.isNotEmpty()) { finish(selected.values.toList()) }
+          Btn(if (selected.isNotEmpty()) stringResource(R.string.btn_add_count, selected.size) else stringResource(R.string.title_select_pdfs), enabled = selected.isNotEmpty(), busy = busy.isNotEmpty()) { finish(selected.values.toList()) }
         }
       } else Spacer(Modifier.navigationBarsPadding())
     }

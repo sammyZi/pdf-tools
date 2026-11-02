@@ -79,7 +79,12 @@ data class WorkflowStep(val id: String, val op: String, val opts: JsonObject)
 
 // Grouped by the job you're doing, in the order those jobs usually come: get pages in, put them in order, put
 // something on them, then finish up. "Capture" is shown as the Scan card on Home, and as a group only in search.
-val SECTIONS = listOf("Capture", "Combine & split", "Arrange pages", "Fill & mark up", "Protect & shrink", "Automate")
+private val sectionsCache = PerLocale { listOf(
+  appContext.getString(R.string.section_capture), appContext.getString(R.string.section_combine_split),
+  appContext.getString(R.string.section_arrange_pages), appContext.getString(R.string.section_fill_markup),
+  appContext.getString(R.string.section_protect_shrink), appContext.getString(R.string.section_automate),
+) }
+val SECTIONS: List<String> get() = sectionsCache.get()
 
 private fun seg(key: String, label: String, choices: List<Pair<String, String>>, def: String, visible: ((Opts) -> Boolean)? = null) =
   OptDef.Seg(key, label, choices, def, visible)
@@ -96,24 +101,25 @@ private fun pageList(key: String, label: String, placeholder: String, visible: (
 
 private object O {
   // "level" (or unset, in older drafts and workflow steps) picks a strength; "size" squeezes until it fits a limit.
-  val squeeze = seg("mode", "Compress by", listOf("level" to "Level", "size" to "Fit under a size"), "level")
-  val quality = seg("quality", "Compression level", listOf("80" to "Light", "60" to "Balanced", "35" to "Strong"), "60") { it.str("mode") != "size" }
-  val target = OptDef.Text("targetMB", "Fit under (MB)", "2", "2", KeyboardType.Decimal, Regex("[^0-9.]")) { it.str("mode") == "size" }
-  val wmText = text("text", "Watermark text", "CONFIDENTIAL", "CONFIDENTIAL")
-  val wmScale = seg("scale", "Size", listOf("0.6" to "Small", "1" to "Medium", "1.4" to "Large"), "1")
-  val opacity = seg("opacity", "Opacity", listOf("0.1" to "10%", "0.2" to "20%", "0.35" to "35%"), "0.2")
-  val numPos = seg("position", "Position", listOf("left" to "Left", "center" to "Center", "right" to "Right"), "center")
-  val numFmt = seg("format", "Format", listOf("n" to "1, 2, 3", "of" to "Page 1 of N"), "n")
-  val angle = seg("angle", "Rotate clockwise by", listOf("90" to "90°", "180" to "180°", "270" to "270°"), "90")
-  val axis = seg("axis", "Mirror", listOf("h" to "Horizontal", "v" to "Vertical", "both" to "Both"), "h")
-  val perSheet = seg("perSheet", "Pages per sheet", listOf("2" to "2", "4" to "4", "6" to "6", "9" to "9", "16" to "16"), "4")
+  fun squeeze() = seg("mode", appContext.getString(R.string.opt_compress_by_label), listOf("level" to appContext.getString(R.string.opt_level), "size" to appContext.getString(R.string.opt_fit_under_size)), "level")
+  fun quality() = seg("quality", appContext.getString(R.string.opt_compression_level_label), listOf("80" to appContext.getString(R.string.opt_light), "60" to appContext.getString(R.string.opt_balanced), "35" to appContext.getString(R.string.opt_strong)), "60") { it.str("mode") != "size" }
+  fun target() = OptDef.Text("targetMB", appContext.getString(R.string.opt_fit_under_mb_label), "2", "2", KeyboardType.Decimal, Regex("[^0-9.]")) { it.str("mode") == "size" }
+  fun wmText() = text("text", appContext.getString(R.string.opt_watermark_text_label), appContext.getString(R.string.opt_watermark_default_text), appContext.getString(R.string.opt_watermark_default_text))
+  fun wmScale() = seg("scale", appContext.getString(R.string.opt_size_label), listOf("0.6" to appContext.getString(R.string.opt_small), "1" to appContext.getString(R.string.opt_medium), "1.4" to appContext.getString(R.string.opt_large)), "1")
+  fun opacity() = seg("opacity", appContext.getString(R.string.opt_opacity_label), listOf("0.1" to "10%", "0.2" to "20%", "0.35" to "35%"), "0.2")
+  fun numPos() = seg("position", appContext.getString(R.string.opt_position_label), listOf("left" to appContext.getString(R.string.opt_left), "center" to appContext.getString(R.string.opt_center), "right" to appContext.getString(R.string.opt_right)), "center")
+  fun numFmt() = seg("format", appContext.getString(R.string.opt_format_label), listOf("n" to "1, 2, 3", "of" to appContext.getString(R.string.opt_page_1_of_n)), "n")
+  fun angle() = seg("angle", appContext.getString(R.string.opt_rotate_clockwise_label), listOf("90" to "90°", "180" to "180°", "270" to "270°"), "90")
+  fun axis() = seg("axis", appContext.getString(R.string.opt_mirror_label), listOf("h" to appContext.getString(R.string.opt_horizontal), "v" to appContext.getString(R.string.opt_vertical), "both" to appContext.getString(R.string.opt_both)), "h")
+  fun perSheet() = seg("perSheet", appContext.getString(R.string.opt_pages_per_sheet_label), listOf("2" to "2", "4" to "4", "6" to "6", "9" to "9", "16" to "16"), "4")
 }
 
 // The crop editor renders these itself, above the page it draws on.
-val CROP_OPTS: List<OptDef> = listOf(
-  seg("mode", "Mode", listOf("crop" to "Crop pages", "resize" to "Resize pages"), "crop"),
-  seg("size", "Page size", SIZES.keys.map { it to it }, "A4") { it.str("mode") == "resize" },
-)
+private val cropOptsCache = PerLocale { listOf(
+  seg("mode", appContext.getString(R.string.opt_crop_mode_label), listOf("crop" to appContext.getString(R.string.opt_crop_pages), "resize" to appContext.getString(R.string.opt_resize_pages)), "crop"),
+  seg("size", appContext.getString(R.string.opt_page_size_label), SIZES.keys.map { it to it }, "A4") { it.str("mode") == "resize" },
+) }
+val CROP_OPTS: List<OptDef> get() = cropOptsCache.get()
 
 private fun one(suffix: String, fn: (ByteArray, Opts) -> ByteArray) = { files: List<Named>, o: Opts -> listOf(Output(suffix, fn(files[0].bytes, o))) }
 private fun many(fn: (ByteArray, Opts) -> List<Named>) = { files: List<Named>, o: Opts -> fn(files[0].bytes, o).map { Output(it.name, it.bytes) } }
@@ -124,10 +130,10 @@ private val NOT_STEPS = setOf("scan", "workflow", "organize", "redact", "fillSig
 fun stepTools() = TOOLS.filter { it.id !in NOT_STEPS }
 
 private fun runWorkflow(files: List<Named>, steps: List<WorkflowStep>): List<Output> {
-  if (steps.isEmpty()) fail("Add at least one step.")
+  if (steps.isEmpty()) fail(appContext.getString(R.string.tool_workflow_fail_no_steps))
   var cur = files.map { Named(it.name.replace(Regex("\\.pdf$", RegexOption.IGNORE_CASE), ""), it.bytes) }
   for (step in steps) {
-    val t = toolById(step.op) ?: fail("A step in this workflow is no longer available. Remove it and try again.")
+    val t = toolById(step.op) ?: fail(appContext.getString(R.string.tool_workflow_fail_step_unavailable))
     val opts = JsonObject(step.opts + (t.step?.fixed ?: NoOpts))
     if (t.input == Input.Pdfs) {
       val base = cur[0].name
@@ -142,147 +148,148 @@ private fun runWorkflow(files: List<Named>, steps: List<WorkflowStep>): List<Out
   return if (cur.size == 1) listOf(Output("processed", cur[0].bytes)) else cur.map { Output("${it.name}-processed", it.bytes, full = true) }
 }
 
-val TOOLS: List<Tool> = listOf(
+private val toolsCache = PerLocale { listOf(
   Tool(
-    "scan", 0, "Scan Document", "Use your camera to scan any document and export it as a PDF, processed on your phone.",
-    "Create PDF", "Building PDF", Input.Images,
-  ) { _, _ -> fail("Open the scanner from the Scan button.") }, // the scanner builds its own PDF
+    "scan", 0, appContext.getString(R.string.tool_scan_title), appContext.getString(R.string.tool_scan_desc),
+    appContext.getString(R.string.tool_scan_cta), appContext.getString(R.string.tool_scan_doing), Input.Images,
+  ) { _, _ -> fail(appContext.getString(R.string.tool_scan_fail_use_button)) }, // the scanner builds its own PDF
   Tool(
-    "workflow", 5, "PDF Workflow Builder",
-    "Pick one or more PDFs, then chain any tools in order — merge, watermark, compress, split and more in one go.",
-    "Run workflow", "Running your steps", Input.Pdfs, min = 1,
+    "workflow", 5, appContext.getString(R.string.tool_workflow_title),
+    appContext.getString(R.string.tool_workflow_desc),
+    appContext.getString(R.string.tool_workflow_cta), appContext.getString(R.string.tool_workflow_doing), Input.Pdfs, min = 1,
   ) { files, o -> runWorkflow(files, o.get<List<WorkflowStep>>("steps") ?: emptyList()) },
   Tool(
-    "merge", 1, "Merge PDFs", "Combine multiple PDFs into one document. Reorder files before merging.", "Merge PDFs", "Merging", Input.Pdfs,
+    "merge", 1, appContext.getString(R.string.tool_merge_title), appContext.getString(R.string.tool_merge_desc), appContext.getString(R.string.tool_merge_cta), appContext.getString(R.string.tool_merge_doing), Input.Pdfs,
   ) { files, _ -> listOf(Output("merged", merge(files))) },
   Tool(
-    "alternate", 1, "Alternate & Mix PDF", "Interleave the pages of two or more PDFs, one page from each in turn.",
-    "Mix pages", "Interleaving pages", Input.Pdfs,
-    opts = listOf(OptDef.Toggle("reverse", "Reverse later files (back sides of a duplex scan)", false)),
+    "alternate", 1, appContext.getString(R.string.tool_alternate_title), appContext.getString(R.string.tool_alternate_desc),
+    appContext.getString(R.string.tool_alternate_cta), appContext.getString(R.string.tool_alternate_doing), Input.Pdfs,
+    opts = listOf(OptDef.Toggle("reverse", appContext.getString(R.string.opt_alternate_reverse_label), false)),
   ) { files, o -> listOf(Output("mixed", alternate(files, o.bool("reverse")))) },
   Tool(
-    "compress", 4, "Compress PDF", "Shrink the photos and scans inside a PDF so the file gets much smaller. Text stays sharp.",
-    "Compress PDF", "Recompressing images", Input.Pdf, opts = listOf(O.squeeze, O.quality, O.target),
+    "compress", 4, appContext.getString(R.string.tool_compress_title), appContext.getString(R.string.tool_compress_desc),
+    appContext.getString(R.string.tool_compress_cta), appContext.getString(R.string.tool_compress_doing), Input.Pdf, opts = listOf(O.squeeze(), O.quality(), O.target()),
     run = one("compressed") { b, o ->
       if (o.str("mode") == "size") compressToSize(b, o.str("targetMB")) else compress(b, o.str("quality").toIntOrNull() ?: 60)
     },
   ),
   Tool(
-    "split", 1, "Split PDF", "Separate PDF into individual pages or extract specific ranges.", "Split PDF", "Splitting", Input.Pdf,
+    "split", 1, appContext.getString(R.string.tool_split_title), appContext.getString(R.string.tool_split_desc), appContext.getString(R.string.tool_split_cta), appContext.getString(R.string.tool_split_doing), Input.Pdf,
     opts = listOf(
-      seg("mode", "Split into", listOf("every" to "Every page", "ranges" to "Custom ranges"), "every"),
-      pageList("ranges", "Page ranges — one file per range", "1-3, 4-6, 7-") { it.str("mode") == "ranges" },
+      seg("mode", appContext.getString(R.string.opt_split_into_label), listOf("every" to appContext.getString(R.string.opt_every_page), "ranges" to appContext.getString(R.string.opt_custom_ranges)), "every"),
+      pageList("ranges", appContext.getString(R.string.opt_split_ranges_label), "1-3, 4-6, 7-") { it.str("mode") == "ranges" },
     ),
     run = many { b, o -> split(b, o.str("mode"), o.str("ranges")) },
   ),
   Tool(
-    "splitText", 1, "Split PDF by Text", "Start a new file at every page containing a phrase you choose.",
-    "Split by text", "Reading every page", Input.Pdf, opts = listOf(text("phrase", "Start a new file at pages containing", "", "e.g. Invoice No.")),
+    "splitText", 1, appContext.getString(R.string.tool_split_text_title), appContext.getString(R.string.tool_split_text_desc),
+    appContext.getString(R.string.tool_split_text_cta), appContext.getString(R.string.tool_split_text_doing), Input.Pdf, opts = listOf(text("phrase", appContext.getString(R.string.opt_split_text_phrase_label), "", appContext.getString(R.string.opt_split_text_phrase_placeholder))),
     run = many { b, o -> splitByText(b, o.str("phrase")) },
   ),
   Tool(
-    "splitBookmarks", 1, "Split PDF by Bookmarks", "Turn each chapter or bookmarked section into its own PDF file.",
-    "Split by bookmarks", "Reading bookmarks", Input.Pdf, run = many { b, _ -> splitByBookmarks(b) },
+    "splitBookmarks", 1, appContext.getString(R.string.tool_split_bookmarks_title), appContext.getString(R.string.tool_split_bookmarks_desc),
+    appContext.getString(R.string.tool_split_bookmarks_cta), appContext.getString(R.string.tool_split_bookmarks_doing), Input.Pdf, run = many { b, _ -> splitByBookmarks(b) },
   ),
   Tool(
-    "splitHalf", 1, "Split PDF in Half", "Cut a PDF into two files, or slice every page down the middle for book scans.",
-    "Split in half", "Cutting pages", Input.Pdf,
-    opts = listOf(seg("mode", "How to split", listOf("file" to "Two files", "vertical" to "Left | Right", "horizontal" to "Top / Bottom"), "file")),
+    "splitHalf", 1, appContext.getString(R.string.tool_split_half_title), appContext.getString(R.string.tool_split_half_desc),
+    appContext.getString(R.string.tool_split_half_cta), appContext.getString(R.string.tool_split_half_doing), Input.Pdf,
+    opts = listOf(seg("mode", appContext.getString(R.string.opt_split_half_mode_label), listOf("file" to appContext.getString(R.string.opt_two_files), "vertical" to appContext.getString(R.string.opt_left_right), "horizontal" to appContext.getString(R.string.opt_top_bottom)), "file")),
     run = many { b, o -> splitHalf(b, o.str("mode")) },
   ),
   Tool(
-    "splitSize", 1, "Split PDF by Size", "Break a large PDF into parts that each stay under a file size limit.",
-    "Split by size", "Measuring parts", Input.Pdf, opts = listOf(num("maxMB", "Max size per part (MB)", "5", "5")),
+    "splitSize", 1, appContext.getString(R.string.tool_split_size_title), appContext.getString(R.string.tool_split_size_desc),
+    appContext.getString(R.string.tool_split_size_cta), appContext.getString(R.string.tool_split_size_doing), Input.Pdf, opts = listOf(num("maxMB", appContext.getString(R.string.opt_split_size_max_mb_label), "5", "5")),
     run = many { b, o -> splitBySize(b, o.str("maxMB")) },
   ),
   Tool(
-    "organize", 2, "Organize Pages", "Rotate, delete, reorder, or rearrange PDF pages easily.", "Save pages", "Saving your page order",
+    "organize", 2, appContext.getString(R.string.tool_organize_title), appContext.getString(R.string.tool_organize_desc), appContext.getString(R.string.tool_organize_cta), appContext.getString(R.string.tool_organize_doing),
     Input.Pdf, noPreview = true,
   ) { files, o -> listOf(Output("organized", organize(files[0].bytes, o.get<List<PageOrder>>("order") ?: emptyList()))) },
   Tool(
-    "rotate", 2, "Rotate PDF", "Rotate individual pages or the entire PDF — 90°, 180°, 270°.", "Rotate PDF", "Rotating", Input.Pdf,
-    opts = listOf(O.angle, pageList("pages", "Pages (leave blank for all)", "e.g. 1, 3-5")),
+    "rotate", 2, appContext.getString(R.string.tool_rotate_title), appContext.getString(R.string.tool_rotate_desc), appContext.getString(R.string.tool_rotate_cta), appContext.getString(R.string.tool_rotate_doing), Input.Pdf,
+    opts = listOf(O.angle(), pageList("pages", appContext.getString(R.string.opt_rotate_pages_label), appContext.getString(R.string.opt_rotate_pages_placeholder))),
     run = one("rotated") { b, o -> rotate(b, o.str("angle").toIntOrNull() ?: 90, o.str("pages")) },
   ),
   Tool(
-    "flip", 2, "Flip PDF", "Mirror every page of a PDF horizontally, vertically or both.", "Flip PDF", "Mirroring pages", Input.Pdf,
-    opts = listOf(O.axis), run = one("flipped") { b, o -> flip(b, o.str("axis")) },
+    "flip", 2, appContext.getString(R.string.tool_flip_title), appContext.getString(R.string.tool_flip_desc), appContext.getString(R.string.tool_flip_cta), appContext.getString(R.string.tool_flip_doing), Input.Pdf,
+    opts = listOf(O.axis()), run = one("flipped") { b, o -> flip(b, o.str("axis")) },
   ),
   Tool(
-    "nup", 2, "Multiple Pages Per Sheet", "Place 2, 4, 6, 9 or 16 PDF pages on a single sheet to save paper.",
-    "Arrange on sheets", "Laying out sheets", Input.Pdf, opts = listOf(O.perSheet, OptDef.Toggle("lines", "Thin lines between pages", false)),
+    "nup", 2, appContext.getString(R.string.tool_nup_title), appContext.getString(R.string.tool_nup_desc),
+    appContext.getString(R.string.tool_nup_cta), appContext.getString(R.string.tool_nup_doing), Input.Pdf, opts = listOf(O.perSheet(), OptDef.Toggle("lines", appContext.getString(R.string.opt_nup_lines_label), false)),
     run = one("n-up") { b, o -> nUp(b, o.str("perSheet"), o.bool("lines")) },
   ),
   Tool(
-    "crop", 2, "Crop & Resize",
-    "Trim margins automatically or pull the corners in to keep just the part you want, or resize every page to a standard size (A4, Letter).",
-    "Apply", "Resizing pages", Input.Pdf, opts = CROP_OPTS,
-    step = Step("Resize pages", listOf(seg("size", "Page size", SIZES.keys.map { it to it }, "A4")), JsonObject(mapOf("mode" to JsonPrimitive("resize")))),
+    "crop", 2, appContext.getString(R.string.tool_crop_title),
+    appContext.getString(R.string.tool_crop_desc),
+    appContext.getString(R.string.action_apply), appContext.getString(R.string.tool_crop_doing), Input.Pdf, opts = CROP_OPTS,
+    step = Step(appContext.getString(R.string.opt_crop_resize_pages_step_title), listOf(seg("size", appContext.getString(R.string.opt_page_size_label), SIZES.keys.map { it to it }, "A4")), JsonObject(mapOf("mode" to JsonPrimitive("resize")))),
     run = one("resized") { b, o -> cropResize(b, o.str("mode").ifEmpty { "crop" }, o.str("size").ifEmpty { "A4" }, o.get<Map<String, List<Float>>>("boxes") ?: emptyMap()) },
   ),
   Tool(
-    "zip", 1, "PDF to ZIP", "Bundle multiple PDFs into a single compressed ZIP archive.", "Create ZIP", "Zipping", Input.Pdfs, min = 1, noPreview = true,
+    "zip", 1, appContext.getString(R.string.tool_zip_title), appContext.getString(R.string.tool_zip_desc), appContext.getString(R.string.tool_zip_cta), appContext.getString(R.string.tool_zip_doing), Input.Pdfs, min = 1, noPreview = true,
   ) { files, _ -> listOf(Output("bundle", zipFiles(files), ext = "zip")) },
   Tool(
-    "fillSign", 3, "Fill & Sign",
-    "Type straight onto a form and drop in a picture of your signature, anywhere on any page — a real form or a scan of one.",
-    "Apply", "Writing on the pages", Input.Pdf,
+    "fillSign", 3, appContext.getString(R.string.tool_fill_sign_title),
+    appContext.getString(R.string.tool_fill_sign_desc),
+    appContext.getString(R.string.action_apply), appContext.getString(R.string.tool_fill_sign_doing), Input.Pdf,
     run = one("signed") { b, o ->
       val items = o.get<List<SignItem>>("items") ?: emptyList()
-      if (items.isEmpty()) fail("Add some text or a picture to a page first.")
+      if (items.isEmpty()) fail(appContext.getString(R.string.tool_fill_sign_fail_empty))
       val images = HashMap<String, ByteArray>()
       for (it in items) {
         if (it.kind != "image" || it.uri in images) continue
         // A resumed draft can point at a picture the OS has since cleared from the cache.
         val f = File(pathOf(it.uri))
-        if (!f.exists()) fail("A picture you added on page ${it.page + 1} is no longer available. Remove it and add it again.")
+        if (!f.exists()) fail(appContext.getString(R.string.tool_fill_sign_fail_picture_missing, it.page + 1))
         images[it.uri] = f.readBytes()
       }
       fillSign(b, items, images)
     },
   ),
   Tool(
-    "watermark", 3, "Add Watermark", "Stamp diagonal text like CONFIDENTIAL or DRAFT across every page.",
-    "Add watermark", "Stamping every page", Input.Pdf, opts = listOf(O.wmText, O.wmScale, O.opacity),
+    "watermark", 3, appContext.getString(R.string.tool_watermark_title), appContext.getString(R.string.tool_watermark_desc),
+    appContext.getString(R.string.tool_watermark_cta), appContext.getString(R.string.tool_watermark_doing), Input.Pdf, opts = listOf(O.wmText(), O.wmScale(), O.opacity()),
     run = one("watermarked") { b, o -> watermark(b, o.str("text"), o.str("opacity").toFloatOrNull() ?: 0.2f, o.str("scale").toFloatOrNull() ?: 1f) },
   ),
   Tool(
-    "pageNumbers", 3, "Add Page Numbers", "Number every page at the bottom, left, center or right.", "Add page numbers", "Numbering pages",
-    Input.Pdf, opts = listOf(O.numPos, O.numFmt), run = one("numbered") { b, o -> pageNumbers(b, o.str("position"), o.str("format")) },
+    "pageNumbers", 3, appContext.getString(R.string.tool_page_numbers_title), appContext.getString(R.string.tool_page_numbers_desc), appContext.getString(R.string.tool_page_numbers_cta), appContext.getString(R.string.tool_page_numbers_doing),
+    Input.Pdf, opts = listOf(O.numPos(), O.numFmt()), run = one("numbered") { b, o -> pageNumbers(b, o.str("position"), o.str("format")) },
   ),
   Tool(
-    "redact", 3, "Redact PDF", "Black out names, numbers or anything private for good, so it can’t be copied, searched or uncovered.",
-    "Redact PDF", "Blacking out", Input.Pdf,
+    "redact", 3, appContext.getString(R.string.tool_redact_title), appContext.getString(R.string.tool_redact_desc),
+    appContext.getString(R.string.tool_redact_cta), appContext.getString(R.string.tool_redact_doing), Input.Pdf,
   ) { files, o ->
     val boxes = o.get<Map<String, List<List<Float>>>>("boxes") ?: emptyMap()
-    if (boxes.isEmpty()) fail("Drag across at least one area to black it out.")
+    if (boxes.isEmpty()) fail(appContext.getString(R.string.tool_redact_fail_no_area))
     listOf(Output("redacted", redactPdf(files[0].bytes, boxes)))
   },
   Tool(
-    "ocr", 4, "OCR Scanned PDF",
-    "Read the text in a scanned PDF and lay it invisibly over the pages, so it can be searched, selected and copied. Runs on your phone.",
-    "Make searchable", "Reading every page", Input.Pdf,
-    run = one("searchable") { b, _ -> ocrPdf(b) ?: fail("No text found. This PDF may already be searchable, or be too blurry to read.") },
+    "ocr", 4, appContext.getString(R.string.tool_ocr_title),
+    appContext.getString(R.string.tool_ocr_desc),
+    appContext.getString(R.string.tool_ocr_cta), appContext.getString(R.string.tool_ocr_doing), Input.Pdf,
+    run = one("searchable") { b, _ -> ocrPdf(b) ?: fail(appContext.getString(R.string.tool_ocr_fail_no_text)) },
   ),
   Tool(
-    "unlock", 4, "Remove Password", "Save a copy of a locked PDF that opens without its password and has no restrictions.",
-    "Remove password", "Unlocking", Input.Pdf, noPreview = true,
+    "unlock", 4, appContext.getString(R.string.tool_unlock_title), appContext.getString(R.string.tool_unlock_desc),
+    appContext.getString(R.string.tool_unlock_cta), appContext.getString(R.string.tool_unlock_doing), Input.Pdf, noPreview = true,
     run = one("unlocked") { b, _ -> removePassword(b) }, // the screen asks for the password when the file is picked
   ),
   Tool(
-    "metadata", 3, "Edit PDF Details", "Change the title, author, subject and keywords other apps and Drive show for a PDF.",
-    "Save details", "Saving details", Input.Pdf, noPreview = true,
+    "metadata", 3, appContext.getString(R.string.tool_metadata_title), appContext.getString(R.string.tool_metadata_desc),
+    appContext.getString(R.string.tool_metadata_cta), appContext.getString(R.string.tool_metadata_doing), Input.Pdf, noPreview = true,
   ) { files, o -> listOf(Output("details", writeDetails(files[0].bytes, o.str("title"), o.str("author"), o.str("subject"), o.str("keywords")))) },
   Tool(
-    "password", 4, "Set Password", "Lock a PDF so it asks for a password before it opens.", "Set password", "Encrypting", Input.Pdf,
-    noPreview = true, opts = listOf(text("password", "Password", "", "Type a password", KeyboardType.Password)),
+    "password", 4, appContext.getString(R.string.tool_password_title), appContext.getString(R.string.tool_password_desc), appContext.getString(R.string.tool_password_cta), appContext.getString(R.string.tool_password_doing), Input.Pdf,
+    noPreview = true, opts = listOf(text("password", appContext.getString(R.string.opt_password_label), "", appContext.getString(R.string.opt_password_placeholder), KeyboardType.Password)),
     run = one("protected") { b, o ->
       val pw = o.str("password")
-      if (pw.isEmpty()) fail("Enter a password.")
-      setPdfPassword(b, pw) ?: fail("This PDF already has a password.")
+      if (pw.isEmpty()) fail(appContext.getString(R.string.tool_password_fail_empty))
+      setPdfPassword(b, pw) ?: fail(appContext.getString(R.string.tool_password_fail_already_set))
     },
   ),
-)
+) }
+val TOOLS: List<Tool> get() = toolsCache.get()
 
 fun toolById(id: String?) = TOOLS.find { it.id == id }
 

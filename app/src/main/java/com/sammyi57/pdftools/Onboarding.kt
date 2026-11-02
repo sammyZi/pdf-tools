@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -82,10 +83,11 @@ private val SMALL = TextStyle(fontFamily = Poppins, fontWeight = FontWeight.Norm
 
 private class Look(val pref: ThemePref, val tint: Color, val chip: String, val body: String, val name: String, val sub: String, val kind: Int)
 
-private val LOOKS = listOf(
-  Look(ThemePref.Light, Color(0xFFECE8FE), "LIGHT", "Bright pages.\nClean white paper.\nEasy daytime\nreading.", "Daylight", "Always light", 1),
-  Look(ThemePref.System, Color(0xFFFDDDD2), "AUTO", "Follows your phone.\nLight by day,\ndark by night.\nNothing to set.", "Auto", "Matches your phone", 0),
-  Look(ThemePref.Dark, Color(0xFFDDE9E1), "DARK", "Lights down low.\nEasy on the eyes\nfor late-night\nreading.", "Midnight", "Always dark", 2),
+@Composable
+private fun onboardingLooks() = listOf(
+  Look(ThemePref.Light, Color(0xFFECE8FE), stringResource(R.string.onboarding_look_light_chip), stringResource(R.string.onboarding_look_light_body), stringResource(R.string.onboarding_look_light_name), stringResource(R.string.onboarding_look_light_sub), 1),
+  Look(ThemePref.System, Color(0xFFFDDDD2), stringResource(R.string.onboarding_look_auto_chip), stringResource(R.string.onboarding_look_auto_body), stringResource(R.string.onboarding_look_auto_name), stringResource(R.string.onboarding_look_auto_sub), 0),
+  Look(ThemePref.Dark, Color(0xFFDDE9E1), stringResource(R.string.onboarding_look_dark_chip), stringResource(R.string.onboarding_look_dark_body), stringResource(R.string.onboarding_look_dark_name), stringResource(R.string.onboarding_look_dark_sub), 2),
 )
 
 @Composable
@@ -97,7 +99,8 @@ fun Onboarding(onDone: () -> Unit) {
 @Composable
 private fun OnboardingBody(themeDark: Boolean, onDone: () -> Unit) {
   val pager = rememberPagerState { PAGES }
-  val looks = rememberPagerState(initialPage = LOOKS.indexOfFirst { it.pref == ThemeState.pref }.coerceAtLeast(0)) { LOOKS.size }
+  val lookList = onboardingLooks()
+  val looks = rememberPagerState(initialPage = lookList.indexOfFirst { it.pref == ThemeState.pref }.coerceAtLeast(0)) { lookList.size }
   val scope = rememberCoroutineScope()
   var pinned by remember { mutableStateOf(listOf<String>()) }
   val page = pager.currentPage
@@ -123,11 +126,11 @@ private fun OnboardingBody(themeDark: Boolean, onDone: () -> Unit) {
   // Finishing applies what was chosen: the pins and the look. Skip leaves everything as it was.
   val finish = {
     pinned.forEach { if (it !in Pins.ids) Pins.toggle(it) }
-    if (LOOKS[looks.currentPage].pref != ThemeState.pref) ThemeState.set(LOOKS[looks.currentPage].pref)
+    if (lookList[looks.currentPage].pref != ThemeState.pref) ThemeState.set(lookList[looks.currentPage].pref)
     onDone()
   }
-  val label = listOf("Get started", "Continue", "That's my look")[page]
-  val line = listOf("No account needed. Everything stays on this phone.", "Pin as many as you like. Change these anytime.", "A good fit can change. Switch anytime in Settings.")[page]
+  val label = listOf(stringResource(R.string.onboarding_cta_get_started), stringResource(R.string.action_continue), stringResource(R.string.onboarding_cta_my_look))[page]
+  val line = listOf(stringResource(R.string.onboarding_line_welcome), stringResource(R.string.onboarding_line_pin), stringResource(R.string.onboarding_line_look))[page]
 
   Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().navigationBarsPadding()) {
     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -138,10 +141,10 @@ private fun OnboardingBody(themeDark: Boolean, onDone: () -> Unit) {
           else -> PageLook(looks)
         }
       }
-      if (page > 0) Box(Modifier.padding(start = 12.dp, top = 6.dp)) { IconBtn(I.chevronLeft, 26.dp, DARK, "Back") { go(page - 1) } }
+      if (page > 0) Box(Modifier.padding(start = 12.dp, top = 6.dp)) { IconBtn(I.chevronLeft, 26.dp, DARK, stringResource(R.string.action_back)) { go(page - 1) } }
       if (page < last) T(
-        "Skip", Type.med.copy(fontSize = 14.sp), DARK,
-        Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 8.dp).tap(shape = CircleShape, scaleTo = 0.92f, label = "Skip the intro", onClick = onDone).padding(horizontal = 14.dp, vertical = 10.dp),
+        stringResource(R.string.action_skip), Type.med.copy(fontSize = 14.sp), DARK,
+        Modifier.align(Alignment.TopEnd).padding(end = 12.dp, top = 8.dp).tap(shape = CircleShape, scaleTo = 0.92f, label = stringResource(R.string.acc_skip_intro), onClick = onDone).padding(horizontal = 14.dp, vertical = 10.dp),
       )
     }
     Box(
@@ -175,32 +178,32 @@ private fun PageWelcome() {
         ),
       )
     }
-    T("PDF Tools", Type.title.copy(fontSize = 21.sp, lineHeight = 28.sp, letterSpacing = (-0.4).sp), DARK, Modifier.align(Alignment.TopCenter).padding(top = 14.dp))
+    T(stringResource(R.string.app_name), Type.title.copy(fontSize = 21.sp, lineHeight = 28.sp, letterSpacing = (-0.4).sp), DARK, Modifier.align(Alignment.TopCenter).padding(top = 14.dp))
 
     Sticky(Color(0xFFFFF0B0), -2f, Modifier.offset(x = (-8).dp, y = h * 0.03f).size(112.dp, 124.dp), fold = true) {
       Icon(I.pin, 26.dp, Color(0xFFE5483B), Modifier.align(Alignment.TopStart).offset(x = 50.dp, y = (-13).dp).graphicsLayer { rotationZ = 22f })
-      Hand("More scans.\nLess paper.", Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 40.dp))
+      Hand(stringResource(R.string.onboarding_note_1), Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 40.dp))
       Canvas(Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 22.dp).size(74.dp, 8.dp)) {
         for (k in 0..1) drawLine(DARK.copy(alpha = 0.3f), Offset(0f, 2.dp.toPx() + k * 4.dp.toPx()), Offset(size.width, 2.dp.toPx() + k * 3.dp.toPx()), 1.2.dp.toPx(), StrokeCap.Round)
       }
     }
     Sticky(Color(0xFFF6F3F0), 4f, Modifier.align(Alignment.TopEnd).offset(x = 14.dp, y = h * 0.14f).size(112.dp, 130.dp)) {
       Icon(I.paperclip, 34.dp, Color(0xFF6F6AA8), Modifier.align(Alignment.TopStart).offset(x = 12.dp, y = (-10).dp))
-      Hand("Sent that\ncontract.", Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 52.dp))
+      Hand(stringResource(R.string.onboarding_note_2), Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 52.dp))
       Icon(I.star, 16.dp, Color(0xFFF0B429), Modifier.align(Alignment.BottomStart).padding(start = 18.dp, bottom = 14.dp))
     }
     Sticky(Color(0xFFE7E1F8), -3f, Modifier.offset(x = (-14).dp, y = h * 0.68f).size(110.dp, 118.dp)) {
       Box(Modifier.align(Alignment.TopCenter).offset(y = (-7).dp).size(64.dp, 15.dp).graphicsLayer { rotationZ = -3f }.background(Color(0xFFBBD3EE).copy(alpha = 0.8f), RoundedCornerShape(1.dp)))
-      Hand("merged them\nall in one.", Modifier.align(Alignment.TopStart).padding(start = 22.dp, top = 22.dp))
+      Hand(stringResource(R.string.onboarding_note_3), Modifier.align(Alignment.TopStart).padding(start = 22.dp, top = 22.dp))
       Icon(I.heartOutline, 18.dp, Color(0xFF6F6AA8), Modifier.align(Alignment.BottomStart).padding(start = 36.dp, bottom = 14.dp))
     }
     Sticky(Color(0xFFFBD9D2), 3f, Modifier.align(Alignment.TopEnd).offset(x = 16.dp, y = h * 0.72f).size(112.dp, 108.dp)) {
       Icon(I.heart, 22.dp, Color(0xFFE5483B), Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 8.dp))
-      Hand("tiny files,\nbig relief.", Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 44.dp))
+      Hand(stringResource(R.string.onboarding_note_4), Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 44.dp))
     }
 
     T(
-      "Every PDF tool.\nAll on your phone.\nAll free.",
+      stringResource(R.string.onboarding_tagline),
       TextStyle(fontFamily = Poppins, fontWeight = FontWeight.Medium, fontSize = 27.sp, lineHeight = 36.sp, letterSpacing = (-0.6).sp),
       DARK, Modifier.align(Alignment.TopCenter).offset(y = h * 0.43f), align = TextAlign.Center,
     )
@@ -250,14 +253,16 @@ private fun Hand(text: String, modifier: Modifier) {
 private fun PageTools(pinned: List<String>, onToggle: (String) -> Unit) {
   Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).verticalScroll(rememberScrollState())) {
     Spacer(Modifier.height(64.dp))
-    Title("Pin Your\nFavourite Tools", "Pinned tools sit at the top of Home.")
+    Title(stringResource(R.string.title_pin_your_tools), stringResource(R.string.msg_pin_your_tools_sub))
     Spacer(Modifier.height(22.dp))
+    val unpinLabel = stringResource(R.string.acc_unpin_tool)
+    val pinLabel = stringResource(R.string.acc_pin_tool)
     TOOLS.forEach { t ->
       val on = t.id in pinned || t.id in Pins.ids
       val shape = RoundedCornerShape(20.dp)
       Row(
         Modifier.padding(bottom = 8.dp).fillMaxWidth().height(64.dp)
-          .tap(shape = shape, scaleTo = 0.98f, label = if (on) "Unpin ${t.title}" else "Pin ${t.title}") { if (t.id !in Pins.ids) onToggle(t.id) }
+          .tap(shape = shape, scaleTo = 0.98f, label = if (on) unpinLabel.format(t.title) else pinLabel.format(t.title)) { if (t.id !in Pins.ids) onToggle(t.id) }
           .background(ROW, shape).padding(start = 12.dp, end = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -274,13 +279,14 @@ private fun PageTools(pinned: List<String>, onToggle: (String) -> Unit) {
 
 @Composable
 private fun PageLook(looks: PagerState) {
-  val look = LOOKS[looks.currentPage]
+  val lookList = onboardingLooks()
+  val look = lookList[looks.currentPage]
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
     Spacer(Modifier.height(56.dp))
-    Column(Modifier.padding(horizontal = 20.dp)) { Title("Which Look\nSuits You?") }
+    Column(Modifier.padding(horizontal = 20.dp)) { Title(stringResource(R.string.title_which_look)) }
     Spacer(Modifier.height(8.dp))
     HorizontalPager(looks, Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 56.dp), pageSpacing = 12.dp) { i ->
-      val l = LOOKS[i]
+      val l = lookList[i]
       Box(Modifier.fillMaxWidth().height(350.dp)) {
         Box(Modifier.padding(top = 78.dp).fillMaxSize().background(l.tint, RoundedCornerShape(34.dp)))
         Character(l.kind, Modifier.fillMaxWidth().height(176.dp).padding(top = 6.dp))
@@ -293,7 +299,7 @@ private fun PageLook(looks: PagerState) {
     T(look.name, TextStyle(fontFamily = Poppins, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.4).sp), DARK, Modifier.padding(top = 10.dp))
     T(look.sub, Type.small.copy(fontSize = 12.sp), SUB, Modifier.padding(top = 2.dp))
     Row(Modifier.padding(top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-      repeat(LOOKS.size) { i ->
+      repeat(lookList.size) { i ->
         val on = i == looks.currentPage
         Box(Modifier.padding(horizontal = 5.dp).height(4.dp).width(if (on) 20.dp else 4.dp).background(if (on) SALMON else Color(0xFFD9D9DA), CircleShape))
       }

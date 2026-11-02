@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
@@ -85,8 +86,9 @@ private class Pages(val path: String) {
 @Composable
 private fun rememberPages(file: Picked, onError: (String) -> Unit): Pages {
   val s = remember(file.path) { Pages(file.path) }
+  val readErr = stringResource(R.string.error_pdf_unreadable_short)
   LaunchedEffect(file.path) {
-    try { s.count = withContext(Dispatchers.IO) { pageSizes(file.path).size } } catch (_: Exception) { onError("Could not read this PDF.") }
+    try { s.count = withContext(Dispatchers.IO) { pageSizes(file.path).size } } catch (_: Exception) { onError(readErr) }
     // Same size as Organize's, so each tool reuses the other's cached renders.
     s.thumbs = withContext(Dispatchers.IO) { runCatching { renderThumbs(file.path, 200) }.getOrNull() }
   }
@@ -130,20 +132,20 @@ private fun PageStage(pages: Pages, clip: Boolean = true, overlay: @Composable B
 private fun PageBar(pages: Pages, trailing: @Composable RowScope.() -> Unit = {}) {
   var goTo by remember { mutableStateOf(false) }
   Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-    IconBtn(I.chevronLeft, color = if (pages.index > 0) c.ink else c.faint, label = "Previous page") { pages.go(pages.index - 1) }
+    IconBtn(I.chevronLeft, color = if (pages.index > 0) c.ink else c.faint, label = stringResource(R.string.acc_previous_page)) { pages.go(pages.index - 1) }
     Row(
       Modifier.tap(pressed = c.sunken, shape = RoundedCornerShape(8.dp), enabled = pages.count > 1) { goTo = true }.padding(start = 6.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
-      T("Page ${pages.index + 1}${if (pages.count > 0) " of ${pages.count}" else ""}", Type.med.copy(fontSize = 14.sp))
+      T(if (pages.count > 0) stringResource(R.string.msg_page_x_of_n, pages.index + 1, pages.count) else stringResource(R.string.acc_page_n, pages.index + 1), Type.med.copy(fontSize = 14.sp))
       if (pages.count > 1) Icon(I.menuDown, 18.dp, c.sub)
     }
-    IconBtn(I.chevronRight, color = if (pages.index < pages.count - 1) c.ink else c.faint, label = "Next page") { pages.go(pages.index + 1) }
+    IconBtn(I.chevronRight, color = if (pages.index < pages.count - 1) c.ink else c.faint, label = stringResource(R.string.acc_next_page)) { pages.go(pages.index + 1) }
     Spacer(Modifier.weight(1f))
     trailing()
   }
   if (goTo) {
-    PromptDialog("Go to page", "${pages.index + 1}", "1 to ${pages.count}", "Page number", "Go", keyboard = KeyboardType.Number, onClose = { goTo = false }) {
+    PromptDialog(stringResource(R.string.title_go_to_page), "${pages.index + 1}", stringResource(R.string.msg_1_to_n, pages.count), stringResource(R.string.hint_page_number), stringResource(R.string.action_go), keyboard = KeyboardType.Number, onClose = { goTo = false }) {
       it.toIntOrNull()?.let { n -> pages.go(n - 1) }
     }
   }
@@ -159,7 +161,7 @@ private fun PageStrip(pages: Pages, marked: (Int) -> Boolean) {
     items(pages.count) { i ->
       val on = i == pages.index
       val thumb = rememberBitmap(pages.thumbs?.getOrNull(i)?.path, 200)
-      Column(Modifier.width(52.dp).tap(scaleTo = 0.92f, label = "Page ${i + 1}") { pages.go(i) }, horizontalAlignment = Alignment.CenterHorizontally) {
+      Column(Modifier.width(52.dp).tap(scaleTo = 0.92f, label = stringResource(R.string.acc_page_n, i + 1)) { pages.go(i) }, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
           Modifier.size(52.dp, 70.dp).clip(RoundedCornerShape(6.dp)).background(c.page)
             .border(if (on) 2.dp else 1.dp, if (on) c.accent else c.lineStrong, RoundedCornerShape(6.dp)),
@@ -190,7 +192,7 @@ private const val TAP = 0.012f // a drag smaller than this (fraction of the page
 
 @Composable
 fun RedactEditor(p: EditorProps) {
-  val file = p.file ?: return T("Choose a PDF, then drag across anything you want blacked out.", Type.small, c.sub)
+  val file = p.file ?: return T(stringResource(R.string.msg_choose_pdf_redact), Type.small, c.sub)
   ResetOnNewFile(file, "boxes", p)
   val pages = rememberPages(file, p.onError)
   val boxes = p.value.get<Map<String, List<List<Float>>>>("boxes") ?: emptyMap()
@@ -245,14 +247,14 @@ fun RedactEditor(p: EditorProps) {
   }
   PageBar(pages) {
     if (onPage.isNotEmpty()) {
-      T("Undo", Type.med, c.accent, Modifier.tap(scaleTo = 0.9f) { edit(pages.index) { it.dropLast(1) } })
-      T("Clear page", Type.med, c.accent, Modifier.padding(start = 16.dp).tap(scaleTo = 0.9f) { edit(pages.index) { emptyList() } })
+      T(stringResource(R.string.action_undo), Type.med, c.accent, Modifier.tap(scaleTo = 0.9f) { edit(pages.index) { it.dropLast(1) } })
+      T(stringResource(R.string.action_clear_page), Type.med, c.accent, Modifier.padding(start = 16.dp).tap(scaleTo = 0.9f) { edit(pages.index) { emptyList() } })
     }
   }
   PageStrip(pages) { !boxes[it.toString()].isNullOrEmpty() }
   T(
-    (if (total > 0) "${plural(total, "area")} on ${plural(boxes.size, "page")} will be blacked out. Tap a box to remove it. " else "Drag across anything you want blacked out. ") +
-      "Pages you mark become images, so nothing under a box can be copied, searched or uncovered.",
+    (if (total > 0) stringResource(R.string.msg_areas_on_pages_blacked_out, plural(total, stringResource(R.string.unit_area_one), stringResource(R.string.unit_area_many)), plural(boxes.size, stringResource(R.string.unit_page_one), stringResource(R.string.unit_page_many))) else stringResource(R.string.msg_drag_to_black_out)) +
+      " " + stringResource(R.string.msg_pages_become_images),
     Type.small, c.sub,
   )
 }
@@ -271,9 +273,9 @@ private val CORNERS = listOf(0 to 0, 1 to 0, 1 to 1, 0 to 1)
 fun PdfCropEditor(p: EditorProps) {
   val scope = rememberCoroutineScope()
   Options(CROP_OPTS, p.value) { v -> p.onChange { v } }
-  val file = p.file ?: return T("Choose a PDF, then pull the corners in to keep just part of the page.", Type.small, c.sub)
+  val file = p.file ?: return T(stringResource(R.string.msg_choose_pdf_crop), Type.small, c.sub)
   if (p.value.str("mode") == "resize") {
-    T("Every page is scaled to fit the size above, keeping its shape. Nothing is cut off.", Type.small, c.sub)
+    T(stringResource(R.string.msg_page_scaled_to_fit), Type.small, c.sub)
     return
   }
   ResetOnNewFile(file, "boxes", p)
@@ -294,6 +296,15 @@ fun PdfCropEditor(p: EditorProps) {
 
   // Auto crop: each page is rendered (the same cached render the editor shows) and trimmed to its ink or, for a
   // photographed page, to the sheet the page detector finds. The crops land in one change at the end.
+  val croppingLabel = stringResource(R.string.msg_cropping_ellipsis)
+  val nOfMLabel = stringResource(R.string.msg_n_of_m)
+  val trimmedPageOf = stringResource(R.string.msg_auto_crop_trimmed_pages)
+  val trimmedSingle = stringResource(R.string.msg_trimmed_adjust)
+  val nothingToTrimAll = stringResource(R.string.msg_nothing_to_trim_all)
+  val nothingToTrimOne = stringResource(R.string.msg_nothing_to_trim_one)
+  val autoCropReadErr = stringResource(R.string.error_auto_crop_unreadable)
+  val pageOne = stringResource(R.string.unit_page_one)
+  val pageMany = stringResource(R.string.unit_page_many)
   val autoCrop = { all: Boolean ->
     if (auto == null && !pages.loading) scope.launch {
       val list = if (all) (0 until pages.count).toList() else listOf(pages.index)
@@ -301,18 +312,18 @@ fun PdfCropEditor(p: EditorProps) {
       val found = HashMap<String, List<Float>>()
       try {
         list.forEachIndexed { n, i ->
-          auto = all to (if (all) "${n + 1} of ${list.size}…" else "Cropping…")
+          auto = all to (if (all) nOfMLabel.format(n + 1, list.size) else croppingLabel)
           autoCropPage(withContext(Dispatchers.IO) { renderPage(file.path, i, 1000) }.path)?.let { found[i.toString()] = it }
         }
         if (found.isNotEmpty()) p.onChange { v -> v.put("boxes", (v.get<Map<String, List<Float>>>("boxes") ?: emptyMap()) + found) }
         note = when {
-          found.isNotEmpty() && all -> "Auto crop trimmed ${plural(found.size, "page")} of ${list.size}. Drag any corner to adjust."
-          found.isNotEmpty() -> "Trimmed. Drag any corner to adjust."
-          all -> "Nothing to trim: every page already runs to its edges."
-          else -> "Nothing to trim: this page already runs to its edges."
+          found.isNotEmpty() && all -> trimmedPageOf.format(plural(found.size, pageOne, pageMany), list.size)
+          found.isNotEmpty() -> trimmedSingle
+          all -> nothingToTrimAll
+          else -> nothingToTrimOne
         }
       } catch (_: Exception) {
-        p.onError("Auto crop could not read this PDF.")
+        p.onError(autoCropReadErr)
       }
       auto = null
     }
@@ -367,22 +378,24 @@ fun PdfCropEditor(p: EditorProps) {
   }
   PageBar(pages) {
     if (stored != null) {
-      if (pages.count > 1) T("Apply to all", Type.med, c.accent, Modifier.tap(scaleTo = 0.9f) {
+      if (pages.count > 1) T(stringResource(R.string.action_apply_to_all), Type.med, c.accent, Modifier.tap(scaleTo = 0.9f) {
         p.onChange { v -> v.put("boxes", (0 until pages.count).associate { it.toString() to stored }) }
       })
-      T("Reset page", Type.med, c.accent, Modifier.padding(start = 16.dp).tap(scaleTo = 0.9f) { setBox(pages.index, null) })
+      T(stringResource(R.string.action_reset_page), Type.med, c.accent, Modifier.padding(start = 16.dp).tap(scaleTo = 0.9f) { setBox(pages.index, null) })
     }
   }
   // Both buttons stay put while one runs (the other just stops taking taps), so nothing jumps.
+  val autoCropLabel = stringResource(R.string.action_auto_crop)
+  val autoCropAllLabel = stringResource(R.string.action_auto_crop_all)
   Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-    Btn(auto?.takeIf { !it.first }?.second ?: "Auto crop", Modifier.weight(1f), I.autoFix, BtnKind.Secondary, busy = auto?.first == false, height = 46.dp) { autoCrop(false) }
-    if (pages.count > 1) Btn(auto?.takeIf { it.first }?.second ?: "Auto crop all", Modifier.weight(1f), I.autoFix, BtnKind.Secondary, busy = auto?.first == true, height = 46.dp) { autoCrop(true) }
+    Btn(auto?.takeIf { !it.first }?.second ?: autoCropLabel, Modifier.weight(1f), I.autoFix, BtnKind.Secondary, busy = auto?.first == false, height = 46.dp) { autoCrop(false) }
+    if (pages.count > 1) Btn(auto?.takeIf { it.first }?.second ?: autoCropAllLabel, Modifier.weight(1f), I.autoFix, BtnKind.Secondary, busy = auto?.first == true, height = 46.dp) { autoCrop(true) }
   }
   PageStrip(pages) { boxes.containsKey(it.toString()) }
   T(
     note.ifEmpty {
-      if (boxes.isNotEmpty()) "${plural(boxes.size, "page")} cropped. Every page has its own frame — leave one alone to keep it whole."
-      else "Pull the corners in, or tap Auto crop to trim the margins. Every page has its own frame."
+      if (boxes.isNotEmpty()) stringResource(R.string.msg_pages_cropped_frame, plural(boxes.size, pageOne, pageMany))
+      else stringResource(R.string.msg_pull_corners_or_autocrop)
     },
     Type.small, c.sub,
   )
@@ -393,7 +406,10 @@ fun PdfCropEditor(p: EditorProps) {
 private const val TEXT_SIZE = 0.028f // a new line's height, as a fraction of the page
 private const val IMG_W = 0.34f // a new picture's width, as a fraction of the page
 // Pen colours, the usual ones for filling forms in; ink first.
-private val PEN = listOf(INK to "Black", "#1D4ED8" to "Blue", "#DC2626" to "Red", "#15803D" to "Green", "#6B7280" to "Grey")
+private val PEN: List<Pair<String, String>> @Composable get() = listOf(
+  INK to stringResource(R.string.color_black), "#1D4ED8" to stringResource(R.string.color_blue), "#DC2626" to stringResource(R.string.color_red),
+  "#15803D" to stringResource(R.string.color_green), "#6B7280" to stringResource(R.string.color_grey),
+)
 private val OPACITY = listOf(1f, 0.75f, 0.5f, 0.25f)
 
 private fun hexColor(hex: String) = Color(android.graphics.Color.parseColor(if (hex.startsWith("#")) hex else "#$hex"))
@@ -401,7 +417,7 @@ private fun hexColor(hex: String) = Color(android.graphics.Color.parseColor(if (
 @Composable
 fun FillSignEditor(p: EditorProps) {
   val scope = rememberCoroutineScope()
-  val file = p.file ?: return T("Choose a PDF, then type on it and drop your signature where it belongs.", Type.small, c.sub)
+  val file = p.file ?: return T(stringResource(R.string.msg_choose_pdf_fill_sign), Type.small, c.sub)
   ResetOnNewFile(file, "items", p)
   val pages = rememberPages(file, p.onError)
   val items = p.value.get<List<SignItem>>("items") ?: emptyList()
@@ -473,17 +489,17 @@ fun FillSignEditor(p: EditorProps) {
   val selected = items.getOrNull(sel)
   PageBar(pages) {
     if (selected != null) {
-      if (selected.kind == "text") IconBtn(I.pencilOutline, label = "Edit text") { typing = sel }
-      IconBtn(I.formatFontSizeDecrease, label = "Smaller") { scale(sel, 1 / 1.18f) }
-      IconBtn(I.formatFontSizeIncrease, label = "Bigger") { scale(sel, 1.18f) }
-      IconBtn(I.deleteOutline, color = c.accent, label = "Remove") { val i = sel; sel = -1; set { l -> l.filterIndexed { j, _ -> j != i } } }
+      if (selected.kind == "text") IconBtn(I.pencilOutline, label = stringResource(R.string.acc_edit_text)) { typing = sel }
+      IconBtn(I.formatFontSizeDecrease, label = stringResource(R.string.acc_smaller)) { scale(sel, 1 / 1.18f) }
+      IconBtn(I.formatFontSizeIncrease, label = stringResource(R.string.acc_bigger)) { scale(sel, 1.18f) }
+      IconBtn(I.deleteOutline, color = c.accent, label = stringResource(R.string.action_remove)) { val i = sel; sel = -1; set { l -> l.filterIndexed { j, _ -> j != i } } }
     }
   }
 
   if (selected != null) {
     val shape = RoundedCornerShape(Radius.group)
     Column(Modifier.padding(top = 8.dp).fillMaxWidth().background(c.surface, shape).border(0.6.dp, c.lineStrong, shape).padding(horizontal = 12.dp, vertical = 4.dp)) {
-      if (selected.kind == "text") PanelRow("Colour") {
+      if (selected.kind == "text") PanelRow(stringResource(R.string.label_colour)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           PEN.forEach { (hex, name) ->
             val on = (selected.color ?: INK) == hex
@@ -495,14 +511,14 @@ fun FillSignEditor(p: EditorProps) {
           }
         }
       }
-      PanelRow("Opacity") {
+      PanelRow(stringResource(R.string.opt_opacity_label)) {
         Segmented(OPACITY.map { it to "${(it * 100).roundToInt()}%" }, OPACITY.minBy { abs(it - selected.opacity) }) { v -> edit(sel) { it.copy(opacity = v) } }
       }
-      PanelRow("Rotate") {
+      PanelRow(stringResource(R.string.label_rotate)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-          IconBtn(I.rotateLeft, label = "Turn left") { turn(-15f) }
-          T("${selected.angle.roundToInt()}°", Type.num.copy(fontSize = 14.sp), modifier = Modifier.width(48.dp).tap(scaleTo = 0.9f, label = "Straighten") { edit(sel) { it.copy(angle = 0f) } }, align = androidx.compose.ui.text.style.TextAlign.Center)
-          IconBtn(I.rotateRight, label = "Turn right") { turn(15f) }
+          IconBtn(I.rotateLeft, label = stringResource(R.string.acc_turn_left)) { turn(-15f) }
+          T("${selected.angle.roundToInt()}°", Type.num.copy(fontSize = 14.sp), modifier = Modifier.width(48.dp).tap(scaleTo = 0.9f, label = stringResource(R.string.acc_straighten)) { edit(sel) { it.copy(angle = 0f) } }, align = androidx.compose.ui.text.style.TextAlign.Center)
+          IconBtn(I.rotateRight, label = stringResource(R.string.acc_turn_right)) { turn(15f) }
           Spacer(Modifier.weight(1f))
           T("+90°", Type.med.copy(fontSize = 13.sp), modifier = Modifier.tap(pressed = c.sunken, shape = CircleShape, scaleTo = 0.92f) { turn(90f) }.border(1.dp, c.lineStrong, CircleShape).padding(horizontal = 12.dp, vertical = 7.dp))
         }
@@ -523,13 +539,14 @@ fun FillSignEditor(p: EditorProps) {
     add(SignItem(pages.index, "image", 0.1f, 0.1f, w = IMG_W, h = IMG_W * fw * aspect / fh, uri = keep.path))
   }
   var signing by remember { mutableStateOf(false) }
+  val pickPngOrJpegErr = stringResource(R.string.error_pick_jpeg_or_png)
   Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    Btn("Text", Modifier.weight(1f), I.formatText, BtnKind.Secondary, height = 46.dp) { typing = -1 }
-    Btn("Signature", Modifier.weight(1.3f), I.drawPen, BtnKind.Secondary, height = 46.dp) { signing = true }
-    Btn("Picture", Modifier.weight(1f), I.imageOutline, BtnKind.Secondary, height = 46.dp) {
+    Btn(stringResource(R.string.label_text), Modifier.weight(1f), I.formatText, BtnKind.Secondary, height = 46.dp) { typing = -1 }
+    Btn(stringResource(R.string.label_signature), Modifier.weight(1.3f), I.drawPen, BtnKind.Secondary, height = 46.dp) { signing = true }
+    Btn(stringResource(R.string.label_picture), Modifier.weight(1f), I.imageOutline, BtnKind.Secondary, height = 46.dp) {
       scope.launch {
         val pic = pickImages(false).firstOrNull() ?: return@launch
-        if (mimeOfPicked(pic.path) == null) return@launch p.onError("Pick a JPEG or PNG picture. HEIC, WebP and other formats can’t go into a PDF here.")
+        if (mimeOfPicked(pic.path) == null) return@launch p.onError(pickPngOrJpegErr)
         addPicture(pic.path)
       }
     }
@@ -537,20 +554,27 @@ fun FillSignEditor(p: EditorProps) {
   if (signing) SignaturePad({ signing = false }) { f -> signing = false; addPicture(f.path) }
   PageStrip(pages) { i -> items.any { it.page == i } }
   T(
-    if (items.isNotEmpty()) "${plural(items.size, "item")} added. Drag anything to move it; tap it to resize, recolour, fade or turn it."
-    else "Add a line of text or a picture of your signature, then drag it where it belongs.",
+    if (items.isNotEmpty()) stringResource(R.string.msg_items_added_help, plural(items.size, stringResource(R.string.unit_item_one), stringResource(R.string.unit_item_many)))
+    else stringResource(R.string.msg_add_text_or_signature_help),
     Type.small, c.sub, Modifier.padding(top = 10.dp),
   )
 
+  val textLatinOnlyErr = stringResource(R.string.error_text_latin_only)
+  val charsLeftOutErr = stringResource(R.string.error_chars_left_out)
+  val addTextTitle = stringResource(R.string.title_add_text)
+  val editTextTitle = stringResource(R.string.title_edit_text)
+  val typeWhatGoesOnPage = stringResource(R.string.hint_type_what_goes_on_page)
+  val addLabel = stringResource(R.string.action_add)
+  val saveLabel = stringResource(R.string.action_save)
   typing?.let { t ->
     PromptDialog(
-      if (t == -1) "Add text" else "Edit text", if (t >= 0) items.getOrNull(t)?.text ?: "" else "", placeholder = "Type what goes on the page",
-      submitLabel = if (t == -1) "Add" else "Save", onClose = { typing = null },
+      if (t == -1) addTextTitle else editTextTitle, if (t >= 0) items.getOrNull(t)?.text ?: "" else "", placeholder = typeWhatGoesOnPage,
+      submitLabel = if (t == -1) addLabel else saveLabel, onClose = { typing = null },
     ) { typed ->
       // The page gets Helvetica, which only writes Latin text: store what it can write, and say what it can't.
       val text = winAnsi(typed).trim()
-      if (text.isEmpty()) return@PromptDialog p.onError("Text on the page can only use Latin letters, numbers and common symbols.")
-      if (Regex("[^\\x20-\\x7E\\xA0-\\xFF‘’“”–—₹]").containsMatchIn(typed)) p.onError("Some characters can’t be written on a PDF page and were left out.")
+      if (text.isEmpty()) return@PromptDialog p.onError(textLatinOnlyErr)
+      if (Regex("[^\\x20-\\x7E\\xA0-\\xFF‘’“”–—₹]").containsMatchIn(typed)) p.onError(charsLeftOutErr)
       if (t == -1) add(SignItem(pages.index, "text", 0.1f, 0.1f, size = TEXT_SIZE, text = text)) else edit(t) { it.copy(text = text) }
     }
   }
@@ -576,11 +600,11 @@ private fun SignaturePad(onClose: () -> Unit, onUse: (File) -> Unit) {
   var live by remember { mutableStateOf<List<Offset>>(emptyList()) }
   val pen = with(LocalDensity.current) { 3.dp.toPx() }
   val shape = RoundedCornerShape(Radius.group)
-  AppDialog(onClose, "Your signature", if (drawing) "Sign with your finger. It's saved on this phone for next time." else "Saved on this phone.") {
+  AppDialog(onClose, stringResource(R.string.title_your_signature), if (drawing) stringResource(R.string.msg_sign_with_finger) else stringResource(R.string.msg_saved_on_this_phone)) {
     Box(Modifier.padding(top = 14.dp).fillMaxWidth().height(170.dp).clip(shape).background(Color.White).border(1.dp, c.lineStrong, shape)) {
       if (drawing) {
         if (strokes.isEmpty() && live.isEmpty()) {
-          T("Sign here", Type.title, Color(0xFFB8B4B0), Modifier.align(Alignment.Center))
+          T(stringResource(R.string.msg_sign_here), Type.title, Color(0xFFB8B4B0), Modifier.align(Alignment.Center))
         }
         androidx.compose.foundation.Canvas(
           Modifier.fillMaxSize().pointerInput(Unit) {
@@ -599,16 +623,16 @@ private fun SignaturePad(onClose: () -> Unit, onUse: (File) -> Unit) {
         }
       } else {
         val bmp = rememberBitmap(saved?.path, 900)
-        if (bmp != null) Image(bmp, "Your saved signature", Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit)
+        if (bmp != null) Image(bmp, stringResource(R.string.acc_your_saved_signature), Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit)
       }
     }
     Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
       if (drawing) {
-        Btn("Clear", Modifier.weight(1f), kind = BtnKind.Secondary, enabled = strokes.isNotEmpty()) { strokes.clear() }
-        Btn("Save & use", Modifier.weight(1f), kind = BtnKind.Accent, enabled = strokes.isNotEmpty()) { onUse(saveSignature(strokes.toList(), pen)) }
+        Btn(stringResource(R.string.action_clear), Modifier.weight(1f), kind = BtnKind.Secondary, enabled = strokes.isNotEmpty()) { strokes.clear() }
+        Btn(stringResource(R.string.action_save_and_use), Modifier.weight(1f), kind = BtnKind.Accent, enabled = strokes.isNotEmpty()) { onUse(saveSignature(strokes.toList(), pen)) }
       } else {
-        Btn("Draw new", Modifier.weight(1f), kind = BtnKind.Secondary) { drawing = true }
-        Btn("Use it", Modifier.weight(1f), kind = BtnKind.Accent) { saved?.let(onUse) }
+        Btn(stringResource(R.string.action_draw_new), Modifier.weight(1f), kind = BtnKind.Secondary) { drawing = true }
+        Btn(stringResource(R.string.action_use_it), Modifier.weight(1f), kind = BtnKind.Accent) { saved?.let(onUse) }
       }
     }
   }

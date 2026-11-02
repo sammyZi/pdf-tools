@@ -30,23 +30,23 @@ object GoogleAuth {
       AccountManager.newChooseAccountIntent(null, null, types, true, null, null, null, null)
     }
     val r = awaitResult(ActivityResultContracts.StartActivityForResult(), intent)
-    if (r.resultCode != Activity.RESULT_OK) throw UserError("Google sign-in was cancelled.")
-    return r.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME) ?: throw UserError("No account was chosen.")
+    if (r.resultCode != Activity.RESULT_OK) throw UserError(appContext.getString(R.string.error_google_signin_cancelled))
+    return r.data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME) ?: throw UserError(appContext.getString(R.string.error_google_no_account_chosen))
   }
 
-  class NeedsConsent(email: String) : Exception("Google Drive access for $email needs to be allowed again.")
+  class NeedsConsent(email: String) : Exception(appContext.getString(R.string.error_drive_needs_consent, email))
 
   /** A drive.file token for exactly this account. Non-interactive never shows UI: it throws NeedsConsent instead. */
   suspend fun token(email: String, interactive: Boolean): String {
     val request = AuthorizationRequest.builder().setRequestedScopes(scopes).setAccount(Account(email, "com.google")).build()
     val result = try { client.authorize(request).await() } catch (e: Exception) { throw UserError(describe(e)) }
-    if (!result.hasResolution()) return result.accessToken ?: throw UserError("Google sign-in failed.")
+    if (!result.hasResolution()) return result.accessToken ?: throw UserError(appContext.getString(R.string.error_google_signin_failed))
     val pending = result.pendingIntent
     if (!interactive || pending == null) throw NeedsConsent(email)
     val r = awaitResult(ActivityResultContracts.StartIntentSenderForResult(), IntentSenderRequest.Builder(pending).build())
-    if (r.resultCode != Activity.RESULT_OK) throw UserError("Google sign-in was cancelled.")
+    if (r.resultCode != Activity.RESULT_OK) throw UserError(appContext.getString(R.string.error_google_signin_cancelled))
     return try {
-      client.getAuthorizationResultFromIntent(r.data).accessToken ?: throw UserError("Google sign-in failed.")
+      client.getAuthorizationResultFromIntent(r.data).accessToken ?: throw UserError(appContext.getString(R.string.error_google_signin_failed))
     } catch (e: ApiException) {
       throw UserError(describe(e))
     }
@@ -59,8 +59,8 @@ object GoogleAuth {
 
   private fun describe(e: Exception): String =
     if (e is ApiException && e.statusCode == 10) {
-      "Google sign-in isn't set up for this app build. Add an Android OAuth client with this package name and signing SHA-1 in Google Cloud."
+      appContext.getString(R.string.error_google_oauth_not_configured)
     } else {
-      e.message ?: "Google sign-in failed."
+      e.message ?: appContext.getString(R.string.error_google_signin_failed)
     }
 }

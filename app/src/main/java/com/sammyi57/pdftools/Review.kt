@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -93,6 +94,8 @@ import kotlin.math.roundToInt
 
 // Adobe Scan's review screen: swipe through pages, a thumbnail strip with long-press multi-select, and the edit toolbar
 // (Add, Retake, Crop, Rotate, Filters, Adjust, Cleanup, Markup, Resize, Reorder, Reset, Delete) before Save PDF.
+
+private data class ToolSpec(val glyph: Int, val id: String, val label: String, val disabled: Boolean)
 
 @Composable
 fun Review(
@@ -141,12 +144,12 @@ fun Review(
     AnimatedContent(selecting, label = "bar", transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) }) { sel ->
       Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (sel) {
-          Tap(I.close, "Cancel selection") { selected = emptyList() }
-          T("${selected.size} selected", Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f))
-          T("Select all", Type.bold, ScanUi.accent, Modifier.tap { selected = pages.map { it.id } }.padding(horizontal = 12.dp, vertical = 12.dp))
+          Tap(I.close, stringResource(R.string.acc_cancel_selection)) { selected = emptyList() }
+          T(stringResource(R.string.msg_count_selected, selected.size.toString()), Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f))
+          T(stringResource(R.string.action_select_all), Type.bold, ScanUi.accent, Modifier.tap { selected = pages.map { it.id } }.padding(horizontal = 12.dp, vertical = 12.dp))
         } else {
-          Tap(I.arrowLeft, "Back", onClick = onClose)
-          Row(Modifier.weight(1f).tap(scaleTo = 0.97f, label = "Rename") { modal = "rename" }.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+          Tap(I.arrowLeft, stringResource(R.string.action_back), onClick = onClose)
+          Row(Modifier.weight(1f).tap(scaleTo = 0.97f, label = stringResource(R.string.action_rename)) { modal = "rename" }.padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             T(doc.name, Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f, fill = false), maxLines = 1)
             Spacer(Modifier.size(6.dp))
             Icon(I.pencilOutline, 15.dp, ScanUi.dim)
@@ -159,7 +162,7 @@ fun Review(
           ) {
             if (!ready) Spinner(ScanUi.onAccent, 16.dp) else Icon(I.filePdfBox, 18.dp, ScanUi.onAccent)
             Spacer(Modifier.size(6.dp))
-            T(if (doc.pdf != null) "Update PDF" else "Save PDF", Type.bold, ScanUi.onAccent)
+            T(if (doc.pdf != null) stringResource(R.string.action_update_pdf) else stringResource(R.string.action_save_pdf), Type.bold, ScanUi.onAccent)
           }
         }
       }
@@ -171,7 +174,7 @@ fun Review(
           pages.getOrNull(i)?.let { PagePreview(it, maxWidth - 40.dp, maxHeight - 40.dp, flat = false) }
         }
       }
-      T("${index + 1} / ${pages.size}", Type.num, ScanUi.text, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).background(ScanUi.raised, CircleShape).border(0.6.dp, ScanUi.line, CircleShape).padding(horizontal = 12.dp, vertical = 4.dp))
+      T(stringResource(R.string.msg_x_slash_y, index + 1, pages.size), Type.num, ScanUi.text, Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp).background(ScanUi.raised, CircleShape).border(0.6.dp, ScanUi.line, CircleShape).padding(horizontal = 12.dp, vertical = 4.dp))
     }
 
     val strip = rememberLazyListState()
@@ -198,7 +201,7 @@ fun Review(
       }
       if (!selecting) item {
         Box(
-          Modifier.size(62.dp, 76.dp).tap(scaleTo = 0.92f, label = "Add pages", onClick = onAddMore).border(2.dp, ScanUi.accent.copy(alpha = 0.45f), RoundedCornerShape(8.dp)),
+          Modifier.size(62.dp, 76.dp).tap(scaleTo = 0.92f, label = stringResource(R.string.acc_add_pages), onClick = onAddMore).border(2.dp, ScanUi.accent.copy(alpha = 0.45f), RoundedCornerShape(8.dp)),
           contentAlignment = Alignment.Center,
         ) { Icon(I.plus, 24.dp, ScanUi.accent) }
       }
@@ -219,7 +222,7 @@ fun Review(
             editShots(pages.map { it.id }) { s, _ -> s.copy(brightness = current.shots[0].brightness, contrast = current.shots[0].contrast) }
           }
           "resize" -> Column {
-            SheetHead("Page size") { ApplyAll(current.size) { editPages(pages.map { it.id }) { it.copy(size = current.size) } } }
+            SheetHead(stringResource(R.string.opt_page_size_label)) { ApplyAll(current.size) { editPages(pages.map { it.id }) { it.copy(size = current.size) } } }
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
               PAGE_SIZES.forEach { (size, label) -> DarkChip(label, current.size == size) { editPages(targets) { it.copy(size = size) } } }
             }
@@ -229,25 +232,25 @@ fun Review(
     }
 
     val tools = listOf(
-      Triple(I.plusBoxMultipleOutline, "Add", selecting) to onAddMore,
-      Triple(I.cameraRetakeOutline, "Retake", selecting) to { onRetake(current) },
-      Triple(I.crop, "Crop", selecting) to { modal = "crop" },
+      ToolSpec(I.plusBoxMultipleOutline, "add", stringResource(R.string.action_add), selecting) to onAddMore,
+      ToolSpec(I.cameraRetakeOutline, "retake", stringResource(R.string.action_retake), selecting) to { onRetake(current) },
+      ToolSpec(I.crop, "crop", stringResource(R.string.label_crop), selecting) to { modal = "crop" },
       // ponytail: rotating clears that page's cleanup/markup strokes; transform the strokes instead if people mind.
-      Triple(I.rotateRight, "Rotate", false) to { editShots(targets) { s, _ -> s.copy(rotation = (s.rotation + 90) % 360, strokes = emptyList()) } },
-      Triple(I.imageFilterBlackWhite, "Filters", false) to { sheet = if (sheet == "filters") "" else "filters" },
-      Triple(I.tuneVariant, "Adjust", false) to { sheet = if (sheet == "adjust") "" else "adjust" },
-      Triple(I.eraser, "Cleanup", selecting) to { modal = "cleanup" },
-      Triple(I.draw, "Markup", selecting) to { modal = "markup" },
-      Triple(I.resize, "Resize", false) to { sheet = if (sheet == "resize") "" else "resize" },
-      Triple(I.swapHorizontal, "Reorder", pages.size < 2) to { modal = "reorder" },
-      Triple(I.restore, "Reset", false) to { modal = "reset" },
-      Triple(I.deleteOutline, "Delete", false) to { modal = "delete" },
+      ToolSpec(I.rotateRight, "rotate", stringResource(R.string.label_rotate), false) to { editShots(targets) { s, _ -> s.copy(rotation = (s.rotation + 90) % 360, strokes = emptyList()) } },
+      ToolSpec(I.imageFilterBlackWhite, "filters", stringResource(R.string.label_filters), false) to { sheet = if (sheet == "filters") "" else "filters" },
+      ToolSpec(I.tuneVariant, "adjust", stringResource(R.string.label_adjust), false) to { sheet = if (sheet == "adjust") "" else "adjust" },
+      ToolSpec(I.eraser, "cleanup", stringResource(R.string.label_cleanup), selecting) to { modal = "cleanup" },
+      ToolSpec(I.draw, "markup", stringResource(R.string.label_markup), selecting) to { modal = "markup" },
+      ToolSpec(I.resize, "resize", stringResource(R.string.label_resize), false) to { sheet = if (sheet == "resize") "" else "resize" },
+      ToolSpec(I.swapHorizontal, "reorder", stringResource(R.string.label_reorder), pages.size < 2) to { modal = "reorder" },
+      ToolSpec(I.restore, "reset", stringResource(R.string.action_reset), false) to { modal = "reset" },
+      ToolSpec(I.deleteOutline, "delete", stringResource(R.string.action_delete), false) to { modal = "delete" },
     )
     Box(Modifier.fillMaxWidth().height(0.6.dp).background(ScanUi.line))
     Row(Modifier.fillMaxWidth().background(ScanUi.panel).horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 8.dp)) {
       tools.forEach { (spec, press) ->
-        val (glyph, label, disabled) = spec
-        val active = label.lowercase() == sheet
+        val (glyph, id, label, disabled) = spec
+        val active = id == sheet
         val tint by animateColorAsState(if (active) ScanUi.accent else ScanUi.text, label = "tool")
         Column(
           Modifier.width(70.dp).graphicsLayer { alpha = if (disabled) 0.3f else 1f }.tap(enabled = !disabled, scaleTo = 0.88f, onClick = press).padding(vertical = 4.dp),
@@ -274,10 +277,10 @@ fun Review(
       Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
           Spacer(Modifier.size(48.dp))
-          T("Reorder pages", Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center)
-          T("Done", Type.bold, ScanUi.accent, Modifier.tap { modal = "" }.padding(12.dp))
+          T(stringResource(R.string.title_reorder_pages), Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center)
+          T(stringResource(R.string.action_done), Type.bold, ScanUi.accent, Modifier.tap { modal = "" }.padding(12.dp))
         }
-        T("Hold a page and drag it to a new spot.", Type.small, ScanUi.dim, Modifier.fillMaxWidth(), align = TextAlign.Center)
+        T(stringResource(R.string.msg_hold_page_drag_reorder), Type.small, ScanUi.dim, Modifier.fillMaxWidth(), align = TextAlign.Center)
         val scroll = rememberScrollState()
         val holder = remember { ScreenScroll(scroll) }
         androidx.compose.runtime.CompositionLocalProvider(LocalScreenScroll provides holder) {
@@ -296,17 +299,17 @@ fun Review(
       }
     }
     "delete" -> ConfirmDialog(
-      if (targets.size > 1) "Delete ${targets.size} pages?" else "Delete this page?", "This removes the page from the scan. It can't be undone.", "Delete",
+      if (targets.size > 1) stringResource(R.string.title_delete_n_pages_q, targets.size) else stringResource(R.string.title_delete_this_page_q), stringResource(R.string.msg_removes_page_no_undo), stringResource(R.string.action_delete),
       danger = true, onDismiss = { modal = "" }, onConfirm = removePages,
     )
     "reset" -> ConfirmDialog(
-      if (targets.size > 1) "Reset ${targets.size} pages?" else "Reset this page?",
-      "Crop goes back to the detected edges, and rotation, filter, brightness, contrast, cleanup and markup are cleared.", "Reset", onDismiss = { modal = "" },
+      if (targets.size > 1) stringResource(R.string.title_reset_n_pages_q, targets.size) else stringResource(R.string.title_reset_this_page_q),
+      stringResource(R.string.msg_reset_page_explain), stringResource(R.string.action_reset), onDismiss = { modal = "" },
     ) {
       editShots(targets) { sh, p -> sh.withDefaults(p.kind, sh.detected) }
       selected = emptyList()
     }
-    "rename" -> PromptDialog("Rename scan", doc.name, onClose = { modal = "" }) { name -> setDoc { it.copy(name = name) } }
+    "rename" -> PromptDialog(stringResource(R.string.title_rename_scan), doc.name, onClose = { modal = "" }) { name -> setDoc { it.copy(name = name) } }
   }
 }
 
@@ -358,7 +361,7 @@ private fun ApplyAll(key: Any, onClick: () -> Unit) {
   var done by remember(key) { mutableStateOf(false) }
   val bg by animateColorAsState(if (done) ScanUi.accent else ScanUi.raised, label = "applied")
   T(
-    if (done) "Applied to all pages" else "Apply to all pages", Type.med.copy(fontSize = 13.sp), if (done) ScanUi.onAccent else ScanUi.accent,
+    if (done) stringResource(R.string.msg_applied_to_all_pages) else stringResource(R.string.action_apply_to_all_pages), Type.med.copy(fontSize = 13.sp), if (done) ScanUi.onAccent else ScanUi.accent,
     Modifier.tap(shape = CircleShape, scaleTo = 0.94f) { onClick(); done = true }.background(bg, CircleShape).padding(horizontal = 14.dp, vertical = 8.dp),
   )
 }
@@ -381,14 +384,14 @@ private fun FiltersSheet(shot: Shot, all: Boolean, onPick: (String) -> Unit, onT
     }
   }
   Column {
-    SheetHead("Filters") {
+    SheetHead(stringResource(R.string.label_filters)) {
       Row(Modifier.tap(scaleTo = 0.95f, onClick = onToggleAll), verticalAlignment = Alignment.CenterVertically) {
         Box(
           Modifier.size(20.dp).background(if (all) ScanUi.accent else Color.Transparent, RoundedCornerShape(5.dp)).border(2.dp, if (all) ScanUi.accent else ScanUi.dim, RoundedCornerShape(5.dp)),
           contentAlignment = Alignment.Center,
         ) { if (all) Icon(I.check, 14.dp, ScanUi.onAccent) }
         Spacer(Modifier.size(8.dp))
-        T("Apply to all pages", Type.med.copy(fontSize = 13.sp), if (all) ScanUi.accent else ScanUi.text)
+        T(stringResource(R.string.action_apply_to_all_pages), Type.med.copy(fontSize = 13.sp), if (all) ScanUi.accent else ScanUi.text)
       }
     }
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -410,11 +413,11 @@ private fun FiltersSheet(shot: Shot, all: Boolean, onPick: (String) -> Unit, onT
 @Composable
 private fun AdjustSheet(shot: Shot, onCommit: (Float, Float) -> Unit, onApplyAll: () -> Unit) {
   Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    ScanSlider("Brightness", shot.brightness) { onCommit(it, shot.contrast) }
-    ScanSlider("Contrast", shot.contrast) { onCommit(shot.brightness, it) }
+    ScanSlider(stringResource(R.string.label_brightness), shot.brightness) { onCommit(it, shot.contrast) }
+    ScanSlider(stringResource(R.string.label_contrast), shot.contrast) { onCommit(shot.brightness, it) }
     Row(verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.weight(1f)) { ApplyAll("${shot.brightness},${shot.contrast}", onApplyAll) }
-      T("Reset", Type.bold, ScanUi.accent, Modifier.tap { onCommit(0f, 0f) }.padding(8.dp))
+      T(stringResource(R.string.action_reset), Type.bold, ScanUi.accent, Modifier.tap { onCommit(0f, 0f) }.padding(8.dp))
     }
   }
 }
@@ -486,7 +489,7 @@ private fun CropEditor(page: ScanPage, onCancel: () -> Unit, onDone: (List<List<
   val setSide = { cs: List<Float>? -> all = all.mapIndexed { i, x -> if (i == side) cs ?: FULL_CORNERS else x } }
   FullSheet(onCancel, ScanUi.bg) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-      EditorBar("Crop", onCancel) {
+      EditorBar(stringResource(R.string.label_crop), onCancel) {
         onDone(all.mapIndexed { i, cs -> if (same(cs, FULL_CORNERS)) null else if (same(cs, page.shots[i].corners)) page.shots[i].corners else cs })
       }
       if (page.shots.size > 1) SideTabs(side) { side = it }
@@ -558,9 +561,9 @@ private fun CropEditor(page: ScanPage, onCancel: () -> Unit, onDone: (List<List<
         }
       }
       Row(Modifier.fillMaxWidth().background(ScanUi.panel).padding(vertical = 10.dp), horizontalArrangement = Arrangement.SpaceAround) {
-        EditorAction(I.autoFix, "Auto-detect", shot.detected != null) { setSide(shot.detected) }
-        EditorAction(I.fullscreen, "No crop") { setSide(null) }
-        EditorAction(I.restore, "Reset") { setSide(shot.corners) }
+        EditorAction(I.autoFix, stringResource(R.string.action_auto_detect), shot.detected != null) { setSide(shot.detected) }
+        EditorAction(I.fullscreen, stringResource(R.string.action_no_crop)) { setSide(null) }
+        EditorAction(I.restore, stringResource(R.string.action_reset)) { setSide(shot.corners) }
       }
     }
   }
@@ -569,9 +572,9 @@ private fun CropEditor(page: ScanPage, onCancel: () -> Unit, onDone: (List<List<
 @Composable
 private fun EditorBar(title: String, onCancel: () -> Unit, onDone: () -> Unit) {
   Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-    T("Cancel", Type.item, ScanUi.text, Modifier.tap(onClick = onCancel).padding(14.dp))
+    T(stringResource(R.string.action_cancel), Type.item, ScanUi.text, Modifier.tap(onClick = onCancel).padding(14.dp))
     T(title, Type.bold.copy(fontSize = 16.sp), ScanUi.text, Modifier.weight(1f), align = TextAlign.Center)
-    T("Done", Type.bold.copy(fontSize = 15.sp), ScanUi.accent, Modifier.tap(onClick = onDone).padding(14.dp))
+    T(stringResource(R.string.action_done), Type.bold.copy(fontSize = 15.sp), ScanUi.accent, Modifier.tap(onClick = onDone).padding(14.dp))
   }
 }
 
@@ -579,7 +582,7 @@ private fun EditorBar(title: String, onCancel: () -> Unit, onDone: () -> Unit) {
 private fun SideTabs(side: Int, onPick: (Int) -> Unit) {
   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
     Row(Modifier.background(ScanUi.raised, CircleShape).padding(3.dp)) {
-      listOf("Front", "Back").forEachIndexed { i, label ->
+      listOf(stringResource(R.string.label_front), stringResource(R.string.label_back)).forEachIndexed { i, label ->
         val bg by animateColorAsState(if (side == i) ScanUi.accent else Color.Transparent, label = "side")
         T(label, Type.med, if (side == i) ScanUi.onAccent else ScanUi.dim, Modifier.tap(scaleTo = 0.94f) { onPick(i) }.background(bg, CircleShape).padding(horizontal = 20.dp, vertical = 6.dp))
       }
@@ -604,9 +607,9 @@ private fun EditorAction(glyph: Int, label: String, enabled: Boolean = true, onC
 
 private data class DrawTool(val shape: String, val glyph: Int, val label: String)
 
-private val DRAW_TOOLS = mapOf(
-  "cleanup" to listOf(DrawTool("path", I.brush, "Brush"), DrawTool("fill", I.rectangle, "Area")),
-  "markup" to listOf(DrawTool("path", I.draw, "Pen"), DrawTool("rect", I.rectangleOutline, "Rectangle"), DrawTool("ellipse", I.ellipseOutline, "Ellipse")),
+private val DRAW_TOOLS: Map<String, List<DrawTool>> @Composable get() = mapOf(
+  "cleanup" to listOf(DrawTool("path", I.brush, stringResource(R.string.label_brush)), DrawTool("fill", I.rectangle, stringResource(R.string.label_area))),
+  "markup" to listOf(DrawTool("path", I.draw, stringResource(R.string.label_pen)), DrawTool("rect", I.rectangleOutline, stringResource(R.string.label_rectangle)), DrawTool("ellipse", I.ellipseOutline, stringResource(R.string.label_ellipse))),
 )
 private val DRAW_SIZES = mapOf("cleanup" to listOf(0.02f, 0.04f, 0.08f), "markup" to listOf(0.004f, 0.008f, 0.016f))
 private val MARKUP_COLORS = listOf("#111111", "#1473E6", "#D7373F", "#12805C", "#E68619", "#FFFFFF")
@@ -644,12 +647,12 @@ private fun DrawEditor(page: ScanPage, mode: String, onCancel: () -> Unit, onDon
 
   FullSheet(onCancel, ScanUi.bg) {
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-      EditorBar(if (mode == "cleanup") "Cleanup" else "Markup", onCancel) { onDone(all) }
+      EditorBar(if (mode == "cleanup") stringResource(R.string.label_cleanup) else stringResource(R.string.label_markup), onCancel) { onDone(all) }
       Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { if (page.shots.size > 1) SideTabs(side) { side = it } }
-        SmallAction(I.undo, "Undo", all[side].isNotEmpty()) { all = all.mapIndexed { i, l -> if (i == side) l.dropLast(1) else l } }
+        SmallAction(I.undo, stringResource(R.string.action_undo), all[side].isNotEmpty()) { all = all.mapIndexed { i, l -> if (i == side) l.dropLast(1) else l } }
         Spacer(Modifier.size(4.dp))
-        SmallAction(I.deleteSweepOutline, "Clear", all[side].isNotEmpty()) { all = all.mapIndexed { i, l -> if (i == side) emptyList() else l } }
+        SmallAction(I.deleteSweepOutline, stringResource(R.string.action_clear), all[side].isNotEmpty()) { all = all.mapIndexed { i, l -> if (i == side) emptyList() else l } }
       }
       BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
         val b = base
@@ -661,6 +664,7 @@ private fun DrawEditor(page: ScanPage, mode: String, onCancel: () -> Unit, onDon
         val w = (b.width * k).dp
         val h = (b.height * k).dp
         val strokes = all[side] + listOfNotNull(live)
+        val drawTools = DRAW_TOOLS
         Box(Modifier.size(w, h)) {
           Image(bmp, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
           Canvas(
@@ -675,7 +679,7 @@ private fun DrawEditor(page: ScanPage, mode: String, onCancel: () -> Unit, onDon
                 }
                 return@pointerInput
               }
-              val make = { p: Offset -> Stroke(DRAW_TOOLS.getValue(mode)[tool].shape, listOf(p.x / this.size.width, p.y / this.size.height), DRAW_SIZES.getValue(mode)[size], fill) }
+              val make = { p: Offset -> Stroke(drawTools.getValue(mode)[tool].shape, listOf(p.x / this.size.width, p.y / this.size.height), DRAW_SIZES.getValue(mode)[size], fill) }
               detectDragGestures(
                 onDragStart = { live = make(it) },
                 onDragEnd = { live?.takeIf { it.points.size >= 4 }?.let { s -> all = all.mapIndexed { i, l -> if (i == side) l + s else l } }; live = null },
@@ -708,27 +712,29 @@ private fun DrawEditor(page: ScanPage, mode: String, onCancel: () -> Unit, onDon
           Box(Modifier.size(0.6.dp, 26.dp).background(ScanUi.line))
           DRAW_SIZES.getValue(mode).indices.forEach { i ->
             Box(
-              Modifier.size(38.dp).tap(shape = CircleShape, scaleTo = 0.9f, label = "Size ${i + 1}") { size = i }.background(ScanUi.raised, CircleShape)
+              Modifier.size(38.dp).tap(shape = CircleShape, scaleTo = 0.9f, label = stringResource(R.string.acc_size_n, i + 1)) { size = i }.background(ScanUi.raised, CircleShape)
                 .border(2.dp, if (size == i) ScanUi.accent else Color.Transparent, CircleShape),
               contentAlignment = Alignment.Center,
             ) { Box(Modifier.size((6 + i * 6).dp).background(ScanUi.text, CircleShape)) }
           }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+          val paperColorLabel = stringResource(R.string.label_paper_color)
+          val autoLabel = stringResource(R.string.label_auto)
           swatches.forEach { sw ->
             Box(
-              Modifier.tap(shape = CircleShape, scaleTo = 0.88f, label = if (sw == "auto") "Paper color" else sw) { color = sw }
+              Modifier.tap(shape = CircleShape, scaleTo = 0.88f, label = if (sw == "auto") paperColorLabel else sw) { color = sw }
                 .border(2.dp, if (color == sw) ScanUi.accent else Color.Transparent, CircleShape).padding(3.dp),
             ) {
               Box(
                 Modifier.size(30.dp).background(hexToColor(if (sw == "auto") base?.bg ?: "#FFFFFF" else sw), CircleShape).border(1.dp, ScanUi.line, CircleShape),
                 contentAlignment = Alignment.Center,
-              ) { if (sw == "auto") T("Auto", Type.label.copy(fontSize = 8.5.sp), Color(0xFF333333)) }
+              ) { if (sw == "auto") T(autoLabel, Type.label.copy(fontSize = 8.5.sp), Color(0xFF333333)) }
             }
           }
           val custom = color !in swatches
           Box(
-            Modifier.tap(shape = CircleShape, scaleTo = 0.88f, label = "Choose a color") {
+            Modifier.tap(shape = CircleShape, scaleTo = 0.88f, label = stringResource(R.string.acc_choose_a_color)) {
               picking = !picking
               if (picking && !custom) setColor(shadeOf(hue, shade))
             }.border(2.dp, if (custom) ScanUi.accent else Color.Transparent, CircleShape).padding(3.dp),
@@ -739,13 +745,13 @@ private fun DrawEditor(page: ScanPage, mode: String, onCancel: () -> Unit, onDon
             }
           }
           Box(
-            Modifier.size(36.dp).tap(shape = CircleShape, scaleTo = 0.88f, label = "Pick a color from the page") { sampling = !sampling }
+            Modifier.size(36.dp).tap(shape = CircleShape, scaleTo = 0.88f, label = stringResource(R.string.acc_pick_color_from_page)) { sampling = !sampling }
               .background(if (sampling) ScanUi.accent else ScanUi.raised, CircleShape),
             contentAlignment = Alignment.Center,
           ) { Icon(I.eyedropper, 18.dp, if (sampling) ScanUi.onAccent else Color.White) }
           val hint = when {
-            sampling -> "Tap the page to use its color."
-            mode == "cleanup" -> "Paint over stains, fingers or marks. Auto uses the paper color."
+            sampling -> stringResource(R.string.msg_tap_page_to_use_color)
+            mode == "cleanup" -> stringResource(R.string.msg_paint_over_stains_help)
             else -> null
           }
           if (hint != null) T(hint, Type.small.copy(fontSize = 12.sp), if (sampling) ScanUi.accent else ScanUi.dim, Modifier.padding(start = 6.dp))

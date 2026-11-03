@@ -162,6 +162,9 @@ fun saveTemp(name: String, bytes: ByteArray): File {
 private val MIME = mapOf(
   "pdf" to "application/pdf", "zip" to "application/zip", "jpg" to "image/jpeg",
   "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "html" to "text/html", "htm" to "text/html", "md" to "text/markdown",
 )
 
 fun mimeOf(name: String) = MIME[name.substringAfterLast('.', "").lowercase()] ?: "application/octet-stream"
@@ -246,6 +249,34 @@ suspend fun pickImages(multi: Boolean): List<Picked> {
   val uris = if (multi) awaitResult(ActivityResultContracts.PickMultipleVisualMedia(), req)
   else listOfNotNull(awaitResult(ActivityResultContracts.PickVisualMedia(), req))
   return withContext(Dispatchers.IO) { uris.mapNotNull { copyIn(it, "image.jpg") } }
+}
+
+/** The system document picker for Office & HTML documents. Empty when closed. */
+suspend fun pickDocs(toolId: String, multi: Boolean = false): List<Picked> {
+  val (types, fallback) = when (toolId) {
+    "wordToPdf" -> arrayOf(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+    ) to "document.docx"
+    "powerpointToPdf" -> arrayOf(
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.ms-powerpoint",
+    ) to "presentation.pptx"
+    "excelToPdf" -> arrayOf(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-excel",
+    ) to "spreadsheet.xlsx"
+    "htmlToPdf" -> arrayOf("text/html") to "page.html"
+    else -> arrayOf(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/html",
+    ) to "document"
+  }
+  val uris = if (multi) awaitResult(ActivityResultContracts.OpenMultipleDocuments(), types)
+  else listOfNotNull(awaitResult(ActivityResultContracts.OpenDocument(), types))
+  return withContext(Dispatchers.IO) { uris.mapNotNull { copyIn(it, fallback) } }
 }
 
 fun mimeOfPicked(path: String): String? = try {

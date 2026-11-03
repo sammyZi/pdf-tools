@@ -237,6 +237,103 @@ private val ART: Map<String, Art.() -> Unit> = mapOf(
     turned(7f, 24f, 30f) { page(16f, 9f, 22f, 29f, lines = 0) }
     page(13f, 12f, 22f, 29f, lines = 4, accent = true)
   },
+  "removePages" to art {
+    page(13f, 10f, 22f, 30f)
+    mark("M18 19L30 31M30 19L18 31", 2.2f)
+  },
+  "extractPages" to art {
+    page(6f, 12f, 18f, 26f)
+    mark("M27 25H34M31 22L34 25L31 28")
+    page(30f, 8f, 14f, 20f, accent = true)
+  },
+  "optimizePdf" to art {
+    page(13f, 10f, 22f, 30f)
+    mark("M24 16V30M19 25L24 30L29 25", 2f)
+    circle(24f, 37f, 2f, k.accent)
+  },
+  "repairPdf" to art {
+    page(13f, 10f, 22f, 30f)
+    mark("M20 25H28M24 21V29", 2.2f)
+  },
+  "imagesToPdf" to art {
+    rect(6f, 14f, 18f, 22f, 3f, fill = k.fill, stroke = k.stroke)
+    circle(11f, 20f, 2f, k.accent)
+    path("M8 32L14 26L18 29L22 23", stroke = k.stroke)
+    mark("M26 25H31M29 22L31 25L29 28")
+    page(32f, 12f, 12f, 18f, accent = true)
+  },
+  "wordToPdf" to art {
+    page(6f, 10f, 18f, 26f)
+    text("W", 15f, 26f, 11f, k.accent)
+    mark("M26 23H32M29 20L32 23L29 26")
+    page(32f, 12f, 12f, 18f, accent = true)
+  },
+  "powerpointToPdf" to art {
+    page(6f, 10f, 18f, 26f)
+    text("P", 15f, 26f, 11f, k.accent)
+    mark("M26 23H32M29 20L32 23L29 26")
+    page(32f, 12f, 12f, 18f, accent = true)
+  },
+  "excelToPdf" to art {
+    page(6f, 10f, 18f, 26f)
+    text("X", 15f, 26f, 11f, k.accent)
+    mark("M26 23H32M29 20L32 23L29 26")
+    page(32f, 12f, 12f, 18f, accent = true)
+  },
+  "htmlToPdf" to art {
+    page(6f, 10f, 18f, 26f)
+    text("<>", 15f, 25f, 8f, k.accent)
+    mark("M26 23H32M29 20L32 23L29 26")
+    page(32f, 12f, 12f, 18f, accent = true)
+  },
+  "pdfToJpg" to art {
+    page(6f, 10f, 16f, 24f, accent = true)
+    mark("M24 22H30M27 19L30 22L27 25")
+    rect(30f, 12f, 14f, 18f, 2f, fill = k.fill, stroke = k.stroke)
+    circle(34f, 17f, 1.5f, k.accent)
+  },
+  "pdfToWord" to art {
+    page(6f, 10f, 16f, 24f, accent = true)
+    mark("M24 22H30M27 19L30 22L27 25")
+    page(30f, 10f, 14f, 22f)
+    text("W", 37f, 24f, 9f, k.accent)
+  },
+  "pdfToPowerpoint" to art {
+    page(6f, 10f, 16f, 24f, accent = true)
+    mark("M24 22H30M27 19L30 22L27 25")
+    page(30f, 10f, 14f, 22f)
+    text("P", 37f, 24f, 9f, k.accent)
+  },
+  "pdfToExcel" to art {
+    page(6f, 10f, 16f, 24f, accent = true)
+    mark("M24 22H30M27 19L30 22L27 25")
+    page(30f, 10f, 14f, 22f)
+    text("X", 37f, 24f, 9f, k.accent)
+  },
+  "pdfToPdfa" to art {
+    page(13f, 10f, 22f, 30f, lines = 2)
+    rect(17f, 25f, 14f, 10f, 2f, fill = k.soft, stroke = k.accent)
+    text("A", 24f, 33f, 8f, k.accent)
+  },
+  "pdfToMarkdown" to art {
+    page(6f, 10f, 16f, 24f, accent = true)
+    mark("M24 22H30M27 19L30 22L27 25")
+    page(30f, 10f, 14f, 22f)
+    text("M", 37f, 24f, 8f, k.accent)
+  },
+  "pdfForms" to art {
+    page(11f, 8f, 26f, 33f, lines = 0)
+    rect(16f, 16f, 6f, 6f, 1.5f, stroke = k.accent)
+    mark("M17 19L19.5 21.5L24 16", 1.5f)
+    line(25f, 20f, 33f, 20f)
+    rect(16f, 26f, 16f, 7f, 1.5f, stroke = k.stroke)
+    line(19f, 30f, 27f, 30f, k.accent)
+  },
+  "comparePdf" to art {
+    page(4f, 10f, 17f, 25f, lines = 3)
+    page(27f, 10f, 17f, 25f, lines = 3, stripe = true)
+    mark("M22 22H26M23.5 20L22 22L23.5 24M24.5 20L26 22L24.5 24")
+  },
 )
 
 @Composable

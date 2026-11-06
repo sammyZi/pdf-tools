@@ -80,6 +80,9 @@ object Viewer {
 
   /** Set by the navigator while the app is up: opens a PDF in the viewer. */
   var open: ((path: String, name: String) -> Unit)? = null
+
+  /** A PDF another app asked us to open, copied into the cache; the navigator shows it once it's up, then clears it. */
+  var incoming by mutableStateOf<Picked?>(null)
 }
 
 private const val MATCH = 0x55FFC94D // every search hit: a soft marker yellow

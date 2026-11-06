@@ -43,6 +43,24 @@
       </intent-filter>
     </activity>
 
+    <!-- Offers the app when another app opens a PDF (file managers, downloads, mail). Off here and switched on at
+         startup only where the in-app viewer works (MainActivity.offerAsPdfViewer), so older phones never pick an app
+         that would just hand the file back. -->
+    <activity-alias
+      android:name=".ViewPdf"
+      android:targetActivity=".MainActivity"
+      android:enabled="false"
+      android:exported="true"
+      android:label="@string/app_name">
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="content" />
+        <data android:mimeType="application/pdf" />
+      </intent-filter>
+    </activity-alias>
+
     <!-- Hands saved files to PDF viewers and the share sheet as content:// uris with read permission. -->
     <provider
       android:name="androidx.core.content.FileProvider"

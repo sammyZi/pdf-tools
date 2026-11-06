@@ -1,6 +1,9 @@
 package com.sammyi57.pdftools
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,8 +11,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.lifecycle.lifecycleScope
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
 
@@ -30,6 +37,33 @@ class MainActivity : ComponentActivity() {
     preferFastestRefreshRate()
     enableEdgeToEdge()
     setContent { App() }
+    offerAsPdfViewer()
+    if (savedInstanceState == null) openIncoming(intent) // after a rotation or restore it's already open
+  }
+
+  // singleTask: a PDF opened from another app while we're running arrives here, not in onCreate.
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    openIncoming(intent)
+  }
+
+  /** A PDF handed over by another app: copied into the cache (its content:// grant ends with this task), then shown. */
+  private fun openIncoming(intent: Intent?) {
+    val uri = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.data ?: return
+    lifecycleScope.launch {
+      val picked = withContext(Dispatchers.IO) { copyIn(uri, "document.pdf") } ?: return@launch
+      if (Viewer.supported) Viewer.incoming = picked else openExternally(picked.path, picked.name)
+    }
+  }
+
+  // Lists the app as a PDF opener only where the in-app viewer works (the .ViewPdf alias in the manifest).
+  private fun offerAsPdfViewer() {
+    val want = if (Viewer.supported) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+    val alias = ComponentName(this, PDF_ALIAS)
+    if (packageManager.getComponentEnabledSetting(alias) != want) {
+      packageManager.setComponentEnabledSetting(alias, want, PackageManager.DONT_KILL_APP)
+    }
   }
 
   override fun onDestroy() {
@@ -50,6 +84,9 @@ class MainActivity : ComponentActivity() {
     }
   }
 }
+
+/** The manifest's .ViewPdf alias: a class name, so it keeps the code's package even when the app id gets a suffix. */
+val PDF_ALIAS = MainActivity::class.java.name.substringBeforeLast('.') + ".ViewPdf"
 
 private val resultKeys = AtomicInteger()
 

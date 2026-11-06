@@ -179,6 +179,10 @@ private fun Root() {
     Viewer.open = { path, name -> nav.viewer(path, name) }
     onDispose { Viewer.open = null }
   }
+  // A PDF opened from another app (a file manager, downloads, mail) goes straight to the viewer.
+  LaunchedEffect(Viewer.incoming) {
+    Viewer.incoming?.let { nav.viewer(it.path, it.name); Viewer.incoming = null }
+  }
   SharedTransitionLayout(Modifier.fillMaxSize().background(c.bg)) {
     val shared = this
     Box(Modifier.fillMaxSize()) {

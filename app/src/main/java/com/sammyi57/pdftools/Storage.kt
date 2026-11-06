@@ -1,6 +1,7 @@
 package com.sammyi57.pdftools
 
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -194,8 +195,12 @@ fun openExternally(path: String, name: String = File(path).name) {
     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
   }
   val ctx = hostActivity ?: appContext
+  // This app opens PDFs too: leave it out, or "another app" could be this one again. A chooser is the only way to.
+  val pick = if (mimeOf(name) == "application/pdf" && Viewer.supported) {
+    Intent.createChooser(view, null).putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(ComponentName(appContext, PDF_ALIAS)))
+  } else view
   try {
-    ctx.startActivity(view.apply { if (ctx === appContext) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
+    ctx.startActivity(pick.apply { if (ctx === appContext) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
   } catch (_: ActivityNotFoundException) {
     share(path, name)
   }
@@ -220,7 +225,7 @@ private fun displayName(uri: Uri): String? = try {
 }
 
 /** Copies a picked document into the cache, so tools read an ordinary file however the picker handed it over. */
-private fun copyIn(uri: Uri, fallback: String): Picked? {
+fun copyIn(uri: Uri, fallback: String): Picked? {
   val name = displayName(uri) ?: fallback
   val dir = File(appContext.cacheDir, "picked/${System.nanoTime()}").apply { mkdirs() }
   val out = File(dir, cleanName(name).ifEmpty { fallback })

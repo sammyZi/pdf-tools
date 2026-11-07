@@ -50,7 +50,7 @@ fun defaults(defs: List<OptDef>): Opts = JsonObject(defs.associate {
   }
 })
 
-enum class Input { Pdf, Pdfs, Images }
+enum class Input { Pdf, Pdfs, Images, Docs }
 
 class Output(val name: String, val bytes: ByteArray, val ext: String = "pdf", val full: Boolean = false) // full: name already includes the source file's
 
@@ -79,7 +79,10 @@ data class WorkflowStep(val id: String, val op: String, val opts: JsonObject)
 
 // Grouped by the job you're doing, in the order those jobs usually come: get pages in, put them in order, put
 // something on them, then finish up. "Capture" is shown as the Scan card on Home, and as a group only in search.
-val SECTIONS = listOf("Capture", "Combine & split", "Arrange pages", "Fill & mark up", "Protect & shrink", "Automate")
+val SECTIONS = listOf(
+  "Capture", "Combine & split", "Arrange pages", "Fill & mark up", "Protect & shrink", "Automate",
+  "Optimize", "Convert to PDF", "Convert from PDF", "Edit PDF",
+)
 
 private fun seg(key: String, label: String, choices: List<Pair<String, String>>, def: String, visible: ((Opts) -> Boolean)? = null) =
   OptDef.Seg(key, label, choices, def, visible)
@@ -120,7 +123,12 @@ private fun many(fn: (ByteArray, Opts) -> List<Named>) = { files: List<Named>, o
 
 // Workflow steps are the tools themselves: multi-PDF tools combine every current file, single-PDF tools run on each
 // file. Excluded: camera input, custom editors, non-PDF output, and password (no step can read the PDF after it).
-private val NOT_STEPS = setOf("scan", "workflow", "organize", "redact", "fillSign", "zip", "password", "unlock", "metadata")
+private val NOT_STEPS = setOf(
+  "scan", "workflow", "organize", "redact", "fillSign", "zip", "password", "unlock", "metadata",
+  "imagesToPdf", "wordToPdf", "powerpointToPdf", "excelToPdf", "htmlToPdf",
+  "pdfToJpg", "pdfToWord", "pdfToPowerpoint", "pdfToExcel", "pdfToMarkdown",
+  "pdfForms", "comparePdf",
+)
 fun stepTools() = TOOLS.filter { it.id !in NOT_STEPS }
 
 private fun runWorkflow(files: List<Named>, steps: List<WorkflowStep>): List<Output> {
@@ -281,6 +289,97 @@ val TOOLS: List<Tool> = listOf(
       if (pw.isEmpty()) fail("Enter a password.")
       setPdfPassword(b, pw) ?: fail("This PDF already has a password.")
     },
+  ),
+  Tool(
+    "removePages", 2, "Remove Pages", "Delete selected pages or page ranges from your PDF document.",
+    "Remove pages", "Removing pages", Input.Pdf,
+    opts = listOf(pageList("pages", "Pages to remove", "e.g. 1, 3-5")),
+    run = one("removed") { b, o -> removePages(b, o.str("pages")) },
+  ),
+  Tool(
+    "extractPages", 2, "Extract Pages", "Extract specific pages or page ranges into a new PDF document.",
+    "Extract pages", "Extracting pages", Input.Pdf,
+    opts = listOf(pageList("pages", "Pages to extract", "e.g. 1-3, 5")),
+    run = one("extracted") { b, o -> extractPages(b, o.str("pages")) },
+  ),
+  Tool(
+    "optimizePdf", 6, "Optimize PDF", "Optimize PDF structure, compress streams, and remove redundant metadata and unreferenced objects.",
+    "Optimize PDF", "Optimizing", Input.Pdf,
+    run = one("optimized") { b, _ -> optimizePdf(b) },
+  ),
+  Tool(
+    "repairPdf", 6, "Repair PDF", "Recover readable pages and rebuild structure from damaged or corrupted PDF files.",
+    "Repair PDF", "Repairing", Input.Pdf,
+    run = one("repaired") { b, _ -> repairPdf(b) },
+  ),
+  Tool(
+    "imagesToPdf", 7, "Images to PDF", "Convert photos and images into a single PDF document.",
+    "Create PDF", "Converting images", Input.Images, min = 1,
+    opts = listOf(seg("fit", "Page size", listOf("fit" to "Fit image size", "a4" to "A4 portrait"), "fit")),
+    run = { files, o -> listOf(Output("converted", imagesToPdf(files, o.str("fit")))) },
+  ),
+  Tool(
+    "wordToPdf", 7, "Word to PDF", "Convert Word documents (.docx) to PDF. Basic and simple documents only.",
+    "Convert to PDF", "Converting Word document", Input.Docs, min = 1,
+    run = one("converted") { b, _ -> wordToPdf(b) },
+  ),
+  Tool(
+    "powerpointToPdf", 7, "PowerPoint to PDF", "Convert PowerPoint presentations (.pptx) to PDF. Basic and simple documents only, text and pictures only.",
+    "Convert to PDF", "Converting slides", Input.Docs, min = 1,
+    run = one("converted") { b, _ -> powerpointToPdf(b) },
+  ),
+  Tool(
+    "excelToPdf", 7, "Excel to PDF", "Convert Excel spreadsheets (.xlsx) to PDF. Basic and simple documents only.",
+    "Convert to PDF", "Converting spreadsheet", Input.Docs, min = 1,
+    run = one("converted") { b, _ -> excelToPdf(b) },
+  ),
+  Tool(
+    "htmlToPdf", 7, "HTML to PDF", "Convert HTML files to PDF. Local files only with WebView offline, network loads blocked and JavaScript off.",
+    "Convert to PDF", "Rendering HTML", Input.Docs, min = 1,
+    run = one("converted") { b, _ -> htmlToPdf(b) },
+  ),
+  Tool(
+    "pdfToJpg", 8, "PDF to JPG", "Extract every page as a high-quality JPG image.",
+    "Convert to JPG", "Converting pages", Input.Pdf, noPreview = true,
+    run = { files, _ -> runPdfToJpg(files[0].bytes) },
+  ),
+  Tool(
+    "pdfToWord", 8, "PDF to Word", "Convert PDF pages into an editable Word document (.docx).",
+    "Convert to Word", "Converting to Word", Input.Pdf, noPreview = true,
+    run = { files, _ -> runPdfToWord(files[0].bytes) },
+  ),
+  Tool(
+    "pdfToPowerpoint", 8, "PDF to PowerPoint", "Convert PDF pages into PowerPoint slides (.pptx). Page images not editable.",
+    "Convert to PowerPoint", "Building presentation", Input.Pdf, noPreview = true,
+    run = { files, _ -> listOf(Output("presentation", pdfToPowerpoint(files[0].bytes), ext = "pptx")) },
+  ),
+  Tool(
+    "pdfToExcel", 8, "PDF to Excel", "Extract tables and structured data from PDF into an Excel spreadsheet (.xlsx).",
+    "Convert to Excel", "Extracting tables", Input.Pdf, noPreview = true,
+    run = { files, _ -> listOf(Output("spreadsheet", pdfToExcel(files[0].bytes), ext = "xlsx")) },
+  ),
+  Tool(
+    "pdfToPdfa", 8, "PDF to PDF/A", "Convert PDF to PDF/A archive format for long-term preservation. Best effort and not validated, never claim certified conformance.",
+    "Convert to PDF/A", "Converting to PDF/A", Input.Pdf,
+    run = one("archived") { b, _ -> pdfToPdfa(b) },
+  ),
+  Tool(
+    "pdfToMarkdown", 8, "PDF to Markdown", "Extract text from PDF formatted as clean Markdown text.",
+    "Convert to Markdown", "Extracting Markdown", Input.Pdf, noPreview = true,
+    run = { files, _ -> listOf(Output("extracted", pdfToMarkdown(files[0].bytes).toByteArray(Charsets.UTF_8), ext = "md")) },
+  ),
+  Tool(
+    "pdfForms", 9, "PDF Forms", "Fill out interactive AcroForm fields in PDF documents. Real AcroForm distinct from Fill and Sign, XFA unsupported.",
+    "Save PDF", "Saving form fields", Input.Pdf,
+    run = one("filled") { b, o ->
+      val values = o.get<Map<String, String>>("fields") ?: emptyMap()
+      fillFormFields(b, values)
+    },
+  ),
+  Tool(
+    "comparePdf", 9, "Compare PDF", "Compare two PDF documents side by side to find differences. Needs exactly 2 PDFs.",
+    "Compare PDFs", "Comparing", Input.Pdfs, min = 2,
+    run = { files, _ -> listOf(Output("comparison", comparePdf(files))) },
   ),
 )
 

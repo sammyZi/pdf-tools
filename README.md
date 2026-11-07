@@ -5,7 +5,7 @@
 <h1 align="center">PDF Tools</h1>
 
 <p align="center">
-  24 free PDF tools and a document scanner for Android.<br>
+  41 free PDF tools and a document scanner for Android.<br>
   Everything runs on your phone. No ads, no sign-up, no tracking.
 </p>
 
@@ -58,16 +58,22 @@ your PDF app instead. The APKs are signed with the app's upload key; a copy inst
 - Cleanup and markup brushes with any colour, including one picked straight off the page.
 - Saved scans are searchable: on-device OCR adds an invisible text layer you can search and copy.
 
-### 24 tools
+### 41 tools
 | Group | Tools |
 |---|---|
 | Combine & split | Merge · Alternate & Mix · Split · Split by Text · Split by Bookmarks · Split in Half · Split by Size · PDF to ZIP |
-| Arrange pages | Organize (reorder, rotate, delete) · Rotate · Flip · Multiple Pages per Sheet · Crop & Resize |
+| Arrange pages | Organize (reorder, rotate, delete) · Rotate · Flip · Multiple Pages per Sheet · Crop & Resize · Remove Pages · Extract Pages |
 | Fill & mark up | Fill & Sign (with a drawn, saved signature) · Watermark · Page Numbers · Redact · Edit PDF Details |
 | Protect & shrink | Compress (by level, or to fit a size) · OCR · Set Password · Remove Password |
 | Automate | Workflow Builder: chain any tools and run them on one or many PDFs |
+| Optimize | Optimize PDF · Repair PDF |
+| Convert to PDF | Images to PDF · Word to PDF · PowerPoint to PDF · Excel to PDF · HTML to PDF |
+| Convert from PDF | PDF to JPG · PDF to Word · PDF to PowerPoint · PDF to Excel · PDF to PDF/A · PDF to Markdown |
+| Edit PDF | PDF Forms (fill real AcroForm fields) · Compare PDF |
 
 Pin the tools you use most to the top of Home. Every tool can preview its result before saving.
+Office conversions are best-effort for basic documents, PDF/A conversion is best-effort and not certified,
+and HTML conversion uses local files only, with network loads blocked and JavaScript off.
 
 ### Read
 - Built-in viewer: smooth scrolling and zoom, select and copy text, search with highlights, links, page thumbnails,

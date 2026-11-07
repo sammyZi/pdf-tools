@@ -68,7 +68,7 @@ class EditorProps(val file: Picked?, val value: Opts, val onChange: ((Opts) -> O
 
 private val EDITOR_TITLES = mapOf(
   "organize" to "Arrange pages", "workflow" to "Add steps", "redact" to "Mark what to black out", "crop" to "Crop or resize", "fillSign" to "Fill in and sign",
-  "watermark" to "Options", "metadata" to "Details",
+  "watermark" to "Options", "metadata" to "Details", "pdfForms" to "Form fields",
 )
 
 @Composable
@@ -80,6 +80,7 @@ private fun Editor(id: String, p: EditorProps) = when (id) {
   "crop" -> PdfCropEditor(p)
   "fillSign" -> FillSignEditor(p)
   "metadata" -> DetailsEditor(p)
+  "pdfForms" -> PdfFormsEditor(p)
   else -> Unit
 }
 
@@ -108,7 +109,79 @@ private fun DetailsEditor(p: EditorProps) {
   T("Leave a field empty to remove it.", Type.small, c.sub)
 }
 
-private fun stripPdf(name: String) = name.replace(Regex("\\.pdf$", RegexOption.IGNORE_CASE), "")
+@Composable
+private fun PdfFormsEditor(p: EditorProps) {
+  val file = p.file ?: return T("Choose a PDF to view and fill its form fields.", Type.small, c.sub)
+  var fields by remember(file.path) { mutableStateOf<List<FormFieldInfo>?>(null) }
+  var loading by remember(file.path) { mutableStateOf(true) }
+
+  LaunchedEffect(file.path) {
+    loading = true
+    try {
+      val found = withContext(Dispatchers.IO) { readFormFields(File(file.path).readBytes()) }
+      fields = found
+      val existing = p.value.get<Map<String, String>>("fields") ?: emptyMap()
+      val updated = existing.toMutableMap()
+      found.forEach { f ->
+        if (!updated.containsKey(f.name)) updated[f.name] = f.value
+      }
+      p.onChange { v -> v.put("fields", updated) }
+    } catch (e: Exception) {
+      p.onError(e.message ?: "Could not read form fields from this PDF.")
+    } finally {
+      loading = false
+    }
+  }
+
+  if (loading) {
+    T("Reading form fields…", Type.small, c.sub)
+    return
+  }
+
+  val fList = fields
+  if (fList.isNullOrEmpty()) {
+    T("No fillable fields found. Use Fill and Sign.", Type.body, c.sub)
+    return
+  }
+
+  val values = p.value.get<Map<String, String>>("fields") ?: emptyMap()
+
+  Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    fList.forEach { field ->
+      val curVal = values[field.name] ?: field.value
+      when (field.type) {
+        "checkbox" -> {
+          val checked = curVal.equals("true", ignoreCase = true) || curVal.equals("yes", ignoreCase = true) || curVal == "1"
+          Row(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(Radius.control)).background(c.surface).padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            T(field.label, Type.body, c.ink, Modifier.weight(1f))
+            Toggle(checked) { next ->
+              val nextMap = values + (field.name to if (next) "true" else "false")
+              p.onChange { v -> v.put("fields", nextMap) }
+            }
+          }
+        }
+        else -> {
+          Column {
+            T(field.label, Type.label, c.sub, Modifier.padding(bottom = 4.dp))
+            Field(
+              curVal,
+              onChange = { next ->
+                val nextMap = values + (field.name to next)
+                p.onChange { v -> v.put("fields", nextMap) }
+              },
+              placeholder = field.label,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+private fun stripPdf(name: String) = name.replace(Regex("\\.(pdf|docx|pptx|xlsx|html|htm|jpe?g|png|webp|zip|md)$", RegexOption.IGNORE_CASE), "")
 
 @Composable
 fun ToolScreen(id: String, resume: Boolean) {
@@ -129,7 +202,7 @@ fun ToolScreen(id: String, resume: Boolean) {
   var locked by remember { mutableStateOf<List<Picked>>(emptyList()) }
   var naming by remember { mutableStateOf<Pair<List<Output>, String>?>(null) }
   var parts by remember { mutableStateOf<List<Named>?>(null) } // a multi-file preview
-  val multi = tool.input == Input.Pdfs
+  val multi = tool.input == Input.Pdfs || tool.input == Input.Images
   val ready = files.size >= (if (multi) tool.min ?: 2 else 1)
   val hasEditor = tool.id in EDITOR_TITLES
 
@@ -151,6 +224,10 @@ fun ToolScreen(id: String, resume: Boolean) {
   // `locked` and are asked for one at a time.
   val addFiles = { picked: List<Picked> ->
     scope.launch {
+      if (tool.input == Input.Images || tool.input == Input.Docs) {
+        if (picked.isNotEmpty()) append(picked)
+        return@launch
+      }
       val ok = ArrayList<Picked>()
       val need = ArrayList<Picked>()
       for (p in if (multi) picked else picked.take(1)) {
@@ -162,7 +239,16 @@ fun ToolScreen(id: String, resume: Boolean) {
     }
     Unit
   }
-  val pickDevice = { scope.launch { addFiles(pickPdfs(multi)) }; Unit }
+  val pickDevice = {
+    scope.launch {
+      when (tool.input) {
+        Input.Images -> append(pickImages(multi = true))
+        Input.Docs -> append(pickDocs(tool.id))
+        Input.Pdf, Input.Pdfs -> addFiles(pickPdfs(multi))
+      }
+    }
+    Unit
+  }
 
   val exec = { mode: String ->
     scope.launch {
@@ -223,11 +309,27 @@ fun ToolScreen(id: String, resume: Boolean) {
       T(tool.desc, Type.body, Brand.cool.copy(alpha = 0.9f), Modifier.padding(top = 14.dp))
     }
 
-    StepHead(1, if (multi) "Choose PDFs" else "Choose a PDF")
+    val stepLabel = when (tool.input) {
+      Input.Images -> if (multi) "Choose images" else "Choose an image"
+      Input.Docs -> "Choose a document"
+      Input.Pdfs -> "Choose PDFs"
+      Input.Pdf -> "Choose a PDF"
+    }
+    StepHead(1, stepLabel)
     if (files.isEmpty()) {
-      Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        PickerCard("Device Storage", "Drive, Downloads, Phone", I.fileDocumentOutline, Brand.cool, Brand.cherry, Modifier.weight(1f), pickDevice)
-        PickerCard("App Files", if (Backup.state.enabled) "Saved here or in Drive" else "Saved in PDF Tools", I.folderOutline, c.accentSoft, c.accent, Modifier.weight(1f)) { appFiles = true }
+      when (tool.input) {
+        Input.Docs -> {
+          PickerCard("Device Storage", "Word, PowerPoint, Excel, HTML", I.fileDocumentOutline, Brand.cool, Brand.cherry, Modifier.fillMaxWidth(), pickDevice)
+        }
+        Input.Images -> {
+          PickerCard("Device Storage", "Photos, Gallery, Downloads", I.fileImageOutline, Brand.cool, Brand.cherry, Modifier.fillMaxWidth(), pickDevice)
+        }
+        Input.Pdf, Input.Pdfs -> {
+          Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PickerCard("Device Storage", "Drive, Downloads, Phone", I.fileDocumentOutline, Brand.cool, Brand.cherry, Modifier.weight(1f), pickDevice)
+            PickerCard("App Files", if (Backup.state.enabled) "Saved here or in Drive" else "Saved in PDF Tools", I.folderOutline, c.accentSoft, c.accent, Modifier.weight(1f)) { appFiles = true }
+          }
+        }
       }
     } else {
       Group(Modifier.animateContentSize()) {
@@ -237,9 +339,13 @@ fun ToolScreen(id: String, resume: Boolean) {
       }
       if (multi && files.size > 1) T("Use the arrows, or hold a file and drag it, to change the order.", Type.small, c.sub, Modifier.padding(top = 8.dp))
       if (multi) {
-        Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          Btn("Device", Modifier.weight(1f), I.plus, BtnKind.Secondary, height = 46.dp, onClick = pickDevice)
-          Btn("App Files", Modifier.weight(1f), I.folderOutline, BtnKind.Secondary, height = 46.dp) { appFiles = true }
+        if (tool.input == Input.Images) {
+          Btn("Add more photos", Modifier.fillMaxWidth().padding(top = 10.dp), I.plus, BtnKind.Secondary, height = 46.dp, onClick = pickDevice)
+        } else {
+          Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Btn("Device", Modifier.weight(1f), I.plus, BtnKind.Secondary, height = 46.dp, onClick = pickDevice)
+            Btn("App Files", Modifier.weight(1f), I.folderOutline, BtnKind.Secondary, height = 46.dp) { appFiles = true }
+          }
         }
       }
     }

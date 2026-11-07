@@ -45,6 +45,11 @@ import kotlinx.coroutines.withContext
 
 private enum class Filter(val label: String) { All("All"), Pdf("PDF"), Zip("ZIP"), Recent("Recent") }
 
+private enum class DriveFilter(val label: String) { All("All"), Recent("Recent"), OnPhone("On this phone"), DriveOnly("Only in Drive") }
+
+/** Saved: what the app made. Phone: every PDF on the device. Drive: the synced Google Drive folder. */
+private enum class Place { Saved, Phone, Drive }
+
 private sealed interface Menu {
   data class OfFile(val f: Saved) : Menu
   data class OfFolder(val f: Folder, val count: Int) : Menu
@@ -56,7 +61,8 @@ fun FilesTab() {
   val scope = rememberCoroutineScope()
   var folderPath by rememberSaveable { mutableStateOf<String?>(null) }
   var driveFolder by rememberSaveable { mutableStateOf<String?>(null) }
-  var onDrive by rememberSaveable { mutableStateOf(false) }
+  var place by rememberSaveable { mutableStateOf(Place.Saved) }
+  val onDrive = place == Place.Drive
   var filter by rememberSaveable { mutableStateOf(Filter.All) }
   var query by rememberSaveable { mutableStateOf("") }
 
@@ -70,7 +76,7 @@ fun FilesTab() {
   // Opening Files also pulls in changes made in Drive.
   LaunchedEffect(Unit) { if (Backup.state.enabled) Backup.syncNow() }
 
-  val folderName = if (onDrive) driveFolder else folder?.name
+  val folderName = if (onDrive) driveFolder else if (place == Place.Phone) null else folder?.name
   val goBack = { folderPath = null; driveFolder = null; query = ""; filter = Filter.All }
   BackHandler(folderName != null) { goBack() }
 
@@ -125,20 +131,24 @@ fun FilesTab() {
       }
       LargeTitle(folderName, if (onDrive) "In Google Drive" else subtitle)
     } else {
-      LargeTitle("Files", if (onDrive) "Synced with Google Drive" else subtitle)
+      LargeTitle("Files", when (place) { Place.Drive -> "Synced with Google Drive"; Place.Phone -> "Every PDF on this phone"; Place.Saved -> subtitle })
     }
 
-    // Phone / Google Drive, only at the top level: inside a folder the subtitle already says which side it is.
+    // Saved / Phone / Google Drive, only at the top level: inside a folder the subtitle already says which side it is.
     if (folderName == null) {
-      Segmented(listOf(false to "On this phone", true to "Google Drive"), onDrive, icons = listOf(I.cellphone, I.googleDrive)) { onDrive = it }
+      Segmented(listOf(Place.Saved to "Saved", Place.Phone to "Phone", Place.Drive to "Drive"), place, icons = listOf(I.folderOutline, I.cellphone, I.googleDrive)) { place = it; query = "" }
       Spacer(Modifier.height(12.dp))
     }
-    SearchField(query, { query = it }, "Search files…")
+    SearchField(query, { query = it }, if (place == Place.Phone) "Search PDFs on this phone…" else "Search files…")
 
-    AnimatedContent(onDrive, label = "place", transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }) { drive ->
+    AnimatedContent(place, label = "place", transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(120)) }) { where ->
       Column {
-        if (drive) {
+        if (where == Place.Drive) {
           DriveFiles(query, driveFolder) { driveFolder = it; query = "" }
+          return@Column
+        }
+        if (where == Place.Phone) {
+          PhoneFiles(query)
           return@Column
         }
         // Folders sit on top as a strip of cards; the filters below only narrow the files.
@@ -380,6 +390,7 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
   var renaming by remember { mutableStateOf<String?>(null) }
   var deleting by remember { mutableStateOf<String?>(null) }
   val data = Backup.cached()
+  var filter by rememberSaveable { mutableStateOf(DriveFilter.All) }
 
   // Only the first visit fetches: after that every sync, which lists Drive anyway, leaves a fresh listing behind.
   LaunchedEffect(state.email, state.enabled) {
@@ -454,9 +465,17 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
 
   val needle = query.trim().lowercase()
   // Searching looks everywhere (inside this folder when one is open); otherwise show just this level.
-  val shown = if (needle.isNotEmpty()) all.filter { (folder == null || it.folder == folder) && "${it.folder}/${it.name}".lowercase().contains(needle) }
+  val matches = if (needle.isNotEmpty()) all.filter { (folder == null || it.folder == folder) && "${it.folder}/${it.name}".lowercase().contains(needle) }
   else all.filter { it.folder == (folder ?: "") }
-  val folders = if (folder == null && needle.isEmpty()) data?.folders ?: emptyList() else emptyList()
+  val shown = matches.filter {
+    when (filter) {
+      DriveFilter.All -> true
+      DriveFilter.Recent -> System.currentTimeMillis() - it.modified < 7 * 86_400_000L
+      DriveFilter.OnPhone -> Backup.isOnPhone(it)
+      DriveFilter.DriveOnly -> !Backup.isOnPhone(it)
+    }
+  }
+  val folders = if (folder == null && needle.isEmpty() && filter == DriveFilter.All) data?.folders ?: emptyList() else emptyList()
   val problem = error.ifEmpty { if (!Backup.syncing) state.error ?: "" else "" }
 
   Spacer(Modifier.height(12.dp))
@@ -465,8 +484,12 @@ private fun ColumnScope.DriveFiles(query: String, folder: String?, onOpenFolder:
   if (problem.isNotEmpty()) T(problem, Type.small, c.accent, Modifier.padding(top = 4.dp, bottom = 4.dp))
   if (downloading.isNotEmpty() && picked == null) T(downloading, Type.small, c.sub, Modifier.padding(vertical = 4.dp))
 
+  if (data != null) ChipRow(DriveFilter.entries.map { it to it.label }, filter, Modifier.padding(top = 12.dp, bottom = 4.dp)) { filter = it }
   when {
     data == null && problem.isEmpty() -> Spinner(c.accent, modifier = Modifier.padding(top = 40.dp).align(Alignment.CenterHorizontally))
+    folders.isEmpty() && shown.isEmpty() && filter != DriveFilter.All && data != null -> T(
+      "No ${filter.label.lowercase()} files here.", Type.body, c.sub, Modifier.fillMaxWidth().padding(top = 28.dp), align = TextAlign.Center,
+    )
     folders.isNotEmpty() || shown.isNotEmpty() -> {
       if (folders.isNotEmpty()) {
         GroupLabel("Folders")

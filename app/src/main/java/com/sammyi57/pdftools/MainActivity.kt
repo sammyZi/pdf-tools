@@ -1,6 +1,10 @@
 package com.sammyi57.pdftools
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.core.content.IntentCompat
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.atomic.AtomicInteger
@@ -29,7 +34,30 @@ class MainActivity : ComponentActivity() {
     PDFBoxResourceLoader.init(applicationContext) // PdfBox's fonts and glyph lists
     preferFastestRefreshRate()
     enableEdgeToEdge()
+    registerAsPdfHandler()
+    if (savedInstanceState == null) takeIncoming(intent)
     setContent { App() }
+  }
+
+  // singleTask: a PDF opened while the app is already running arrives here instead of in a new activity.
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    takeIncoming(intent)
+  }
+
+  /** Shows PDF Tools in "Open with" for PDFs, where the in-app viewer exists to open them. */
+  private fun registerAsPdfHandler() {
+    if (!Viewer.supported) return
+    packageManager.setComponentEnabledSetting(ComponentName(this, "com.sammyi57.pdftools.PdfHandler"), PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
+  }
+
+  private fun takeIncoming(intent: Intent) {
+    Incoming.uri = when (intent.action) {
+      Intent.ACTION_VIEW -> intent.data
+      Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+      else -> null
+    }
   }
 
   override fun onDestroy() {

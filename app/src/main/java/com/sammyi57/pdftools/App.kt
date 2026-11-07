@@ -179,6 +179,14 @@ private fun Root() {
     Viewer.open = { path, name -> nav.viewer(path, name) }
     onDispose { Viewer.open = null }
   }
+  // A PDF opened from another app waits behind the terms screen, then opens in the viewer.
+  val incoming = Incoming.uri
+  LaunchedEffect(incoming, agreed) {
+    if (incoming == null || !agreed) return@LaunchedEffect
+    // Cleared last: it's this effect's key, so clearing it first would cancel the copy half way.
+    importIncoming(incoming)?.let { nav.viewer(it.path, it.name) }
+    Incoming.uri = null
+  }
   SharedTransitionLayout(Modifier.fillMaxSize().background(c.bg)) {
     val shared = this
     Box(Modifier.fillMaxSize()) {

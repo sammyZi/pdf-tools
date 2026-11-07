@@ -232,6 +232,13 @@ private fun copyIn(uri: Uri, fallback: String): Picked? {
   }
 }
 
+/** A PDF another app handed to us ("Open with", Share): set by MainActivity, shown in the viewer once the app is up. */
+object Incoming {
+  var uri by androidx.compose.runtime.mutableStateOf<Uri?>(null)
+}
+
+suspend fun importIncoming(uri: Uri): Picked? = withContext(Dispatchers.IO) { copyIn(uri, "document.pdf") }
+
 /** The system document picker for PDFs. Empty when closed. */
 suspend fun pickPdfs(multi: Boolean): List<Picked> {
   val types = arrayOf("application/pdf")
